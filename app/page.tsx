@@ -166,7 +166,10 @@ function AnalyticsForm() {
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm text-gray-900"
                 type="password"
                 placeholder="API Key 입력"
-                value={credentials["amplitudeApiKey"] || ""}
+                value={
+                  credentials["amplitudeApiKey"] ||
+                  "c962deb572754a3cccc44f706e41eff5"
+                }
                 onChange={(e) =>
                   handleInputChange("amplitudeApiKey", e.target.value)
                 }
@@ -175,7 +178,10 @@ function AnalyticsForm() {
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm text-gray-900"
                 type="password"
                 placeholder="Secret Key 입력"
-                value={credentials["amplitudeSecretKey"] || ""}
+                value={
+                  credentials["amplitudeSecretKey"] ||
+                  "ad1c968d2cce70e9345d412aa2025c7a"
+                }
                 onChange={(e) =>
                   handleInputChange("amplitudeSecretKey", e.target.value)
                 }
