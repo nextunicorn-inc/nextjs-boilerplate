@@ -22,7 +22,7 @@ export async function chatWithGemini(
   };
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-pro-latest",
+    model: "gemini-flash-latest",
     generationConfig: {
       maxOutputTokens: 8192,
       temperature: 0.5,
