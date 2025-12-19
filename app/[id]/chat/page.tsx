@@ -64,7 +64,6 @@ export default function ChatPage() {
         </p>
       </header>
 
-      {/* ... (나머지 채팅 UI 코드는 기존과 동일) ... */}
       <div className="flex-1 overflow-y-auto space-y-4 mb-4 p-4 border rounded-xl bg-white shadow-sm">
         {messages.map((m, i) => (
           <div
@@ -89,26 +88,33 @@ export default function ChatPage() {
         )}
       </div>
 
-      <div className="flex gap-3">
-        <input
-          className="flex-1 border border-gray-300 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+      <div className="flex gap-3 items-end">
+        <textarea
+          className="flex-1 border border-gray-300 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm resize-none text-gray-900 placeholder-gray-400"
+          rows={1} // 기본 높이는 1줄 (내용이 길어지면 스크롤됨)
+          style={{ minHeight: "60px", maxHeight: "200px" }} // 최소/최대 높이 설정
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="데이터에 대해 물어보세요..."
+          placeholder="데이터에 대해 물어보세요... (Shift+Enter로 줄바꿈)"
           onKeyDown={(e) => {
-            // 조합 중(한글 입력 중)이면 전송하지 않음
+            // 1. 한글 조합 중일 때는 이벤트 무시 (중복 전송 방지)
             if (e.nativeEvent.isComposing) return;
 
+            // 2. 엔터키 로직
             if (e.key === "Enter") {
-              e.preventDefault(); // 엔터 키의 기본 줄바꿈 동작 등 방지
-              handleSend();
+              // Shift 없이 엔터만 쳤을 때 -> 전송
+              if (!e.shiftKey) {
+                e.preventDefault(); // 줄바꿈 방지
+                handleSend();
+              }
+              // Shift + Enter는 기본 동작(줄바꿈)을 수행하므로 별도 처리 안 함
             }
           }}
         />
         <button
           onClick={handleSend}
           disabled={loading}
-          className="bg-blue-600 text-white px-8 rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-400"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 h-[60px] rounded-xl font-bold shadow-sm transition-all disabled:bg-gray-400 flex items-center justify-center shrink-0"
         >
           전송
         </button>
