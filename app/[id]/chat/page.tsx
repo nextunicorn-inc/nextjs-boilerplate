@@ -1,122 +1,119 @@
 "use client";
 
-import { useState } from "react";
-import { useSession } from "next-auth/react";
-import { useParams } from "next/navigation"; // 1. useParams 추가
-import { chatWithGemini } from "@/app/actions/gemini-agent";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ANALYTICS_TOOLS } from "./constants/tools-config";
 
-export default function ChatPage() {
-  const { data: session } = useSession();
-  const params = useParams(); // 2. URL 파라미터 가져오기
-  const propertyId = params.id as string; // URL의 [id] 부분이 여기 들어옵니다.
+export default function Home() {
+  const router = useRouter();
 
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>(
-    []
-  );
-  const [loading, setLoading] = useState(false);
+  // 1. 하이드레이션 불일치 방지용 (Client Mount 체크)
+  const [mounted, setMounted] = useState(false);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    if (!session?.accessToken) {
-      alert("로그인이 필요합니다!");
+  // 2. 마운트 된 후에만 localStorage 접근 (useEffect 경고 해결)
+  useEffect(() => {
+    setMounted(true);
+
+    const savedCreds: Record<string, string> = {};
+    ANALYTICS_TOOLS.forEach((tool) => {
+      tool.inputs.forEach((input) => {
+        const val = localStorage.getItem(input.key);
+        if (val) savedCreds[input.key] = val;
+      });
+    });
+    setCredentials(savedCreds);
+  }, []);
+
+  const handleInputChange = (key: string, value: string) => {
+    setCredentials((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleStartChat = () => {
+    const hasAnyKey = Object.values(credentials).some(
+      (val) => val.trim() !== ""
+    );
+
+    if (!hasAnyKey) {
+      alert("최소 하나의 분석 도구는 연결해야 합니다.");
       return;
     }
 
-    const userMsg = input;
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setLoading(true);
+    Object.entries(credentials).forEach(([key, value]) => {
+      if (value.trim()) {
+        localStorage.setItem(key, value);
+      } else {
+        localStorage.removeItem(key);
+      }
+    });
 
-    try {
-      // 3. URL에서 가져온 propertyId 사용
-      const aiResponse = await chatWithGemini(
-        userMsg,
-        session.accessToken as string,
-        propertyId
-      );
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: aiResponse },
-      ]);
-    } catch (error) {
-      console.error(error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "에러가 발생했습니다." },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    // 3. [ID 제거] 깔끔하게 /chat 경로로 이동
+    router.push("/chat");
   };
 
+  // 서버 사이드 렌더링 중에는 아무것도 안 보여줌 (UI 깨짐 방지)
+  if (!mounted) return null;
+
   return (
-    <div className="max-w-3xl mx-auto p-6 h-screen flex flex-col bg-gray-50">
-      <header className="mb-4 text-center">
-        <h1 className="text-2xl font-bold">🤖 AI 애널리틱스</h1>
-        {/* 현재 분석 중인 ID 표시 */}
-        <p className="text-sm text-gray-500 mt-1">
-          Target Property:{" "}
-          <span className="font-mono bg-gray-200 px-1 rounded">
-            {propertyId}
-          </span>
-        </p>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white p-8 rounded-2xl shadow-xl space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-extrabold text-gray-900">
+            🤖 통합 데이터 분석 AI
+          </h1>
+          <p className="mt-2 text-gray-500">
+            API 키를 입력하면 AI가 연동하여 분석해 드립니다. <br />
+            (키는 브라우저에만 저장됩니다)
+          </p>
+        </div>
 
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4 p-4 border rounded-xl bg-white shadow-sm">
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`flex ${
-              m.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
+        <div className="space-y-6">
+          {ANALYTICS_TOOLS.map((tool) => (
             <div
-              className={`p-4 rounded-2xl max-w-[80%] whitespace-pre-wrap leading-relaxed shadow-sm ${
-                m.role === "user"
-                  ? "bg-blue-600 text-white rounded-br-none"
-                  : "bg-gray-100 text-gray-800 rounded-bl-none"
-              }`}
+              key={tool.id}
+              className={`p-5 border border-gray-200 rounded-xl transition-all hover:shadow-md bg-${tool.themeColor}-50/30 hover:border-${tool.themeColor}-200`}
             >
-              {m.content}
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">{tool.icon}</span>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-800">{tool.name}</h3>
+                  <p className="text-xs text-gray-500">{tool.description}</p>
+                </div>
+                {tool.docsUrl && (
+                  <a
+                    href={tool.docsUrl}
+                    target="_blank"
+                    className="text-xs text-blue-500 hover:underline"
+                  >
+                    키 확인 방법 ↗
+                  </a>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {tool.inputs.map((input) => (
+                  <div key={input.key}>
+                    <input
+                      className={`w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-${tool.themeColor}-500 outline-none transition-all text-sm text-gray-900`}
+                      type={input.type}
+                      placeholder={input.placeholder}
+                      value={credentials[input.key] || ""}
+                      onChange={(e) =>
+                        handleInputChange(input.key, e.target.value)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="text-gray-500 text-sm p-4">AI가 분석 중입니다...</div>
-        )}
-      </div>
+          ))}
+        </div>
 
-      <div className="flex gap-3 items-end">
-        <textarea
-          className="flex-1 border border-gray-300 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm resize-none text-gray-900 placeholder-gray-400"
-          rows={1} // 기본 높이는 1줄 (내용이 길어지면 스크롤됨)
-          style={{ minHeight: "60px", maxHeight: "200px" }} // 최소/최대 높이 설정
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="데이터에 대해 물어보세요... (Shift+Enter로 줄바꿈)"
-          onKeyDown={(e) => {
-            // 1. 한글 조합 중일 때는 이벤트 무시 (중복 전송 방지)
-            if (e.nativeEvent.isComposing) return;
-
-            // 2. 엔터키 로직
-            if (e.key === "Enter") {
-              // Shift 없이 엔터만 쳤을 때 -> 전송
-              if (!e.shiftKey) {
-                e.preventDefault(); // 줄바꿈 방지
-                handleSend();
-              }
-              // Shift + Enter는 기본 동작(줄바꿈)을 수행하므로 별도 처리 안 함
-            }
-          }}
-        />
         <button
-          onClick={handleSend}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 h-[60px] rounded-xl font-bold shadow-sm transition-all disabled:bg-gray-400 flex items-center justify-center shrink-0"
+          onClick={handleStartChat}
+          className="w-full bg-black hover:bg-gray-800 text-white py-4 rounded-xl font-bold text-lg shadow-lg transform active:scale-[0.99] transition-all flex items-center justify-center gap-2"
         >
-          전송
+          <span>분석 시작하기 🚀</span>
         </button>
       </div>
     </div>

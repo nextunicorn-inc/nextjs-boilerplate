@@ -2,59 +2,33 @@
 
 import {
   GoogleGenerativeAI,
-  SchemaType,
-  type Tool,
   HarmCategory,
   HarmBlockThreshold,
 } from "@google/generative-ai";
-import { runDynamicReport } from "./ga4-tool";
+
+// 위에서 만든 도구들 가져오기
+import { Ga4Tool, AmplitudeTool, type AgentTool } from "./tools/definitions";
+
+// 🛠️ [확장성 핵심] 여기에 툴을 추가하기만 하면 끝납니다.
+const REGISTERED_TOOLS: AgentTool[] = [
+  Ga4Tool,
+  AmplitudeTool,
+  // MixpanelTool, // 나중에 주석만 풀면 됨
+];
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const ga4Tool: Tool = {
-  functionDeclarations: [
-    {
-      name: "get_ga4_report",
-      description:
-        "Google Analytics 4 데이터를 조회합니다. 날짜, 측정기준, 지표를 설정하여 호출하세요.",
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          startDate: {
-            type: SchemaType.STRING,
-            description: "시작 날짜 (예: '30daysAgo', '2024-01-01')",
-          },
-          endDate: {
-            type: SchemaType.STRING,
-            description: "종료 날짜 (보통 'today')",
-          },
-          dimensions: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
-            description: "분석 기준",
-          },
-          metrics: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
-            description: "수치 데이터",
-          },
-          limit: {
-            type: SchemaType.NUMBER,
-            description: "가져올 데이터 행 수",
-          },
-        },
-        required: ["startDate", "endDate", "dimensions", "metrics"],
-      },
-    },
-  ],
-};
-
 export async function chatWithGemini(
   userMessage: string,
-  accessToken: string,
-  propertyId: string
+  apiKeys: { [key: string]: string | undefined } // 키 타입도 유연하게 변경
 ) {
+  // 1. 등록된 도구들의 선언문(Declaration)만 뽑아서 Gemini에게 전달
+  const toolsConfig = {
+    functionDeclarations: REGISTERED_TOOLS.map((tool) => tool.declaration),
+  };
+
   const model = genAI.getGenerativeModel({
+    // 요청하신 모델명 적용 (latest alias 사용)
     model: "gemini-flash-latest",
     safetySettings: [
       {
@@ -74,7 +48,8 @@ export async function chatWithGemini(
         threshold: HarmBlockThreshold.BLOCK_NONE,
       },
     ],
-    tools: [ga4Tool],
+    // any 캐스팅 없이 깔끔하게 주입
+    tools: [toolsConfig as any],
   });
 
   const chat = model.startChat({
@@ -83,16 +58,14 @@ export async function chatWithGemini(
         role: "user",
         parts: [
           {
-            text: "당신은 전문 데이터 분석가입니다. 질문을 해결하기 위해 필요한 데이터가 있다면 도구를 여러 번 사용해도 좋습니다. 최종적으로 한국어로 요약된 인사이트를 제공하세요.",
+            text: "당신은 데이터 분석 통합 에이전트입니다. 제공된 도구들을 자유롭게 사용하여 질문에 답하세요. 키가 없으면 요청하세요.",
           },
         ],
       },
       {
         role: "model",
         parts: [
-          {
-            text: "네, 알겠습니다. 데이터를 깊이 있게 분석하여 인사이트를 드리겠습니다.",
-          },
+          { text: "확인했습니다. 연결된 모든 분석 도구를 활용하겠습니다." },
         ],
       },
     ],
@@ -101,66 +74,59 @@ export async function chatWithGemini(
   try {
     console.log("🗣️ 사용자 질문:", userMessage);
 
-    // 1. 첫 요청 전송
     let result = await chat.sendMessage(userMessage);
     let response = result.response;
     let functionCalls = response.functionCalls();
 
-    // 🔄 [핵심 수정] while 루프를 사용하여 도구 호출이 없을 때까지 반복
-    // (최대 5회로 제한하여 무한 루프 방지)
     let loopCount = 0;
-    const MAX_LOOPS = 5;
+    const MAX_LOOPS = 10;
 
     while (functionCalls && functionCalls.length > 0 && loopCount < MAX_LOOPS) {
       loopCount++;
       const call = functionCalls[0];
-      console.log(
-        `🤖 [Loop ${loopCount}] 도구 실행 요청:`,
-        call.name,
-        call.args
+      console.log(`🤖 [Loop ${loopCount}] 도구 실행 요청: ${call.name}`);
+
+      // 🔍 [핵심 로직] 리스트에서 이름이 일치하는 도구를 찾아서 실행 (Dynamic Dispatch)
+      const targetTool = REGISTERED_TOOLS.find(
+        (tool) => tool.name === call.name
       );
 
-      if (call.name === "get_ga4_report") {
-        const args = call.args as any;
+      let apiResult = "";
 
-        // 2. 도구 실행
-        const apiResult = await runDynamicReport(accessToken, propertyId, {
-          startDate: args.startDate,
-          endDate: args.endDate,
-          dimensions: args.dimensions || [],
-          metrics: args.metrics || [],
-          limit: args.limit || 10,
-        });
-
-        console.log(
-          `📊 [Loop ${loopCount}] 데이터 확보 완료. 결과를 AI에게 전달합니다.`
-        );
-
-        // 3. 실행 결과를 AI에게 전달하고 **다음 반응**을 기다림
-        result = await chat.sendMessage([
-          {
-            functionResponse: {
-              name: "get_ga4_report",
-              response: { result: apiResult },
-            },
-          },
-        ]);
-
-        // 4. AI의 새로운 응답 확인 (또 도구를 쓰려는지, 아니면 답변을 줄지)
-        response = result.response;
-        functionCalls = response.functionCalls();
+      if (targetTool) {
+        try {
+          // 해당 도구의 execute 함수 실행 (내부 로직은 몰라도 됨)
+          apiResult = await targetTool.execute(call.args, apiKeys);
+        } catch (e: any) {
+          apiResult = `Tool Execution Error: ${e.message}`;
+        }
+      } else {
+        apiResult = `Error: Unknown tool '${call.name}'`;
       }
+
+      console.log(`📊 [Loop ${loopCount}] 데이터 확보 완료 (${call.name})`);
+
+      result = await chat.sendMessage([
+        {
+          functionResponse: {
+            name: call.name,
+            response: { result: apiResult },
+          },
+        },
+      ]);
+
+      response = result.response;
+      functionCalls = response.functionCalls();
     }
 
-    // 루프가 끝나면 최종 텍스트 답변 반환
     const finalText = response.text();
     if (!finalText) return "분석을 완료했으나 답변을 생성하지 못했습니다.";
 
     return finalText;
   } catch (error: any) {
-    console.error("🔥 Gemini Agent Error:", error);
+    console.error("🔥 Agent Error:", error);
     if (error.message?.includes("429"))
-      return "잠시만 기다려주세요! (무료 버전 사용량 초과)";
-    return `오류 발생: ${error.message}`;
+      return "잠시만 기다려주세요! (무료 티어 사용량 초과)";
+    return `시스템 오류: ${error.message}`;
   }
 }

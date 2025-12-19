@@ -1,132 +1,129 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
-import { getGA4Properties } from "@/app/actions/getProperties"; // 아까 만든 서버 액션
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic"; // 1. dynamic import 가져오기
+import { ANALYTICS_TOOLS } from "./constants/tools-config";
 
-export default function GASetupPage() {
+// 2. 실제 로직이 담긴 컴포넌트 (이름은 자유, export 안 해도 됨)
+// 이 컴포넌트는 'ssr: false' 덕분에 브라우저에서만 실행됨이 보장됩니다.
+function AnalyticsForm() {
   const router = useRouter();
-  const { data: session, status: sessionStatus } = useSession();
-  const [properties, setProperties] = useState<any[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
-    null
-  );
-  const [loading, setLoading] = useState(false);
 
-  const handleSelect = (id: string) => {
-    const cleanId = id.replace("properties/", ""); // 'properties/123' -> '123'
-    setSelectedPropertyId(cleanId);
-    setIsModalOpen(false);
-    alert(`선택된 속성 ID: ${cleanId} - 이제 이 ID로 AI 분석을 시작합니다!`);
+  // 3. [핵심] 브라우저 환경이 보장되므로, useEffect 없이 초기값에서 바로 localStorage 사용!
+  // 더 이상 'window is not defined' 에러도, 'useEffect' 경고도 없습니다.
+  const [credentials, setCredentials] = useState<Record<string, string>>(() => {
+    const savedCreds: Record<string, string> = {};
+    ANALYTICS_TOOLS.forEach((tool) => {
+      tool.inputs.forEach((input) => {
+        // 여기서 바로 접근 가능
+        const val = localStorage.getItem(input.key);
+        if (val) savedCreds[input.key] = val;
+      });
+    });
+    return savedCreds;
+  });
+
+  const handleInputChange = (key: string, value: string) => {
+    setCredentials((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleStartChat = () => {
-    if (selectedPropertyId) {
-      // 3. 동적 경로로 이동!
-      router.push(`/${selectedPropertyId}/chat`);
+    const hasAnyKey = Object.values(credentials).some(
+      (val) => val.trim() !== ""
+    );
+
+    if (!hasAnyKey) {
+      alert("최소 하나의 분석 도구는 연결해야 합니다.");
+      return;
     }
+
+    Object.entries(credentials).forEach(([key, value]) => {
+      if (value.trim()) {
+        localStorage.setItem(key, value);
+      } else {
+        localStorage.removeItem(key);
+      }
+    });
+
+    router.push("/chat");
   };
 
-  // 세션이 생기면(로그인 성공 시) 자동으로 속성 리스트를 가져옴
-  useEffect(() => {
-    const fetchProperties = async (token: string) => {
-      setLoading(true);
-      const data = await getGA4Properties(token);
-      if (data) {
-        // 계정 요약 데이터에서 실제 속성(property)들만 추출하여 평탄화
-        const allProps = data.flatMap(
-          (account: any) => account.propertySummaries || []
-        );
-        setProperties(allProps);
-        setIsModalOpen(true);
-      }
-      setLoading(false);
-    };
-
-    if (session?.accessToken && !selectedPropertyId) {
-      fetchProperties(session.accessToken as string);
-    }
-  }, [session]);
-
-  if (sessionStatus === "loading") return <div>로딩 중...</div>;
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white">
-      {/* 1. 메인 연동 버튼 */}
-      {!selectedPropertyId ? (
-        <button
-          onClick={() => signIn("google")}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:scale-105"
-        >
-          {loading ? "데이터 불러오는 중..." : "GA 연동하기"}
-        </button>
-      ) : (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white p-8 rounded-2xl shadow-xl space-y-8">
         <div className="text-center">
-          <p className="text-green-600 font-bold mb-2">연동 완료! ✅</p>
-          <p className="text-gray-600">선택된 ID: {selectedPropertyId}</p>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="mt-4 text-blue-500 underline"
-          >
-            다른 속성 선택하기
-          </button>
+          <h1 className="text-3xl font-extrabold text-gray-900">
+            🤖 통합 데이터 분석 AI
+          </h1>
+          <p className="mt-2 text-gray-500">
+            API 키를 입력하면 AI가 연동하여 분석해 드립니다. <br />
+            (키는 브라우저에만 저장됩니다)
+          </p>
         </div>
-      )}
 
-      {selectedPropertyId && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={handleStartChat}
-            disabled={loading}
-            className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition"
-          >
-            AI와 채팅 시작하기
-          </button>
-        </div>
-      )}
-
-      {/* 2. 속성 선택 모달 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 m-4">
-            <h2 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
-              분석할 사이트를 선택해 주세요
-            </h2>
-
-            <div className="max-h-60 overflow-y-auto space-y-2 mb-6">
-              {properties.length > 0 ? (
-                properties.map((prop) => (
-                  <button
-                    key={prop.property}
-                    onClick={() => handleSelect(prop.property)}
-                    className="w-full text-left p-3 hover:bg-blue-50 rounded-lg border border-gray-100 transition-colors flex justify-between items-center group"
-                  >
-                    <span className="font-medium text-gray-700 group-hover:text-blue-600">
-                      {prop.displayName}
-                    </span>
-                    <span className="text-xs text-gray-400 font-mono">
-                      {prop.property.split("/")[1]}
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <p className="text-center py-4 text-gray-500">
-                  연결된 GA4 속성이 없습니다.
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="w-full py-2 text-gray-500 hover:text-gray-700 font-medium"
+        <div className="space-y-6">
+          {ANALYTICS_TOOLS.map((tool) => (
+            <div
+              key={tool.id}
+              className={`p-5 border border-gray-200 rounded-xl transition-all hover:shadow-md bg-${tool.themeColor}-50/30 hover:border-${tool.themeColor}-200`}
             >
-              닫기
-            </button>
-          </div>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">{tool.icon}</span>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-800">{tool.name}</h3>
+                  <p className="text-xs text-gray-500">{tool.description}</p>
+                </div>
+                {tool.docsUrl && (
+                  <a
+                    href={tool.docsUrl}
+                    target="_blank"
+                    className="text-xs text-blue-500 hover:underline"
+                  >
+                    키 확인 방법 ↗
+                  </a>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {tool.inputs.map((input) => (
+                  <div key={input.key}>
+                    <input
+                      className={`w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-${tool.themeColor}-500 outline-none transition-all text-sm text-gray-900`}
+                      type={input.type}
+                      placeholder={input.placeholder}
+                      value={credentials[input.key] || ""}
+                      onChange={(e) =>
+                        handleInputChange(input.key, e.target.value)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+
+        <button
+          onClick={handleStartChat}
+          className="w-full bg-black hover:bg-gray-800 text-white py-4 rounded-xl font-bold text-lg shadow-lg transform active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+        >
+          <span>분석 시작하기 🚀</span>
+        </button>
+      </div>
     </div>
   );
 }
+
+// 4. [마법의 코드] 위에서 만든 컴포넌트를 dynamic import로 감싸서 내보내기
+// Promise.resolve를 사용하여 외부 파일 없이도 dynamic import 효과를 냅니다.
+const DynamicHome = dynamic(() => Promise.resolve(AnalyticsForm), {
+  ssr: false, // 서버 사이드 렌더링 끄기
+  loading: () => (
+    <div className="min-h-screen flex items-center justify-center">
+      로딩 중...
+    </div>
+  ),
+});
+
+export default DynamicHome;
