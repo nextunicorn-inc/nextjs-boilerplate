@@ -57,7 +57,7 @@ export async function chatWithGemini(
 ) {
   // 2. 모델 초기화
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-pro-latest",
     // 💡 이제 'as any' 없이도 타입이 완벽하게 일치합니다.
     tools: [ga4Tool],
   });

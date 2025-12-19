@@ -95,7 +95,15 @@ export default function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="데이터에 대해 물어보세요..."
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onKeyDown={(e) => {
+            // 조합 중(한글 입력 중)이면 전송하지 않음
+            if (e.nativeEvent.isComposing) return;
+
+            if (e.key === "Enter") {
+              e.preventDefault(); // 엔터 키의 기본 줄바꿈 동작 등 방지
+              handleSend();
+            }
+          }}
         />
         <button
           onClick={handleSend}
