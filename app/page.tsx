@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { getGA4Properties } from "@/app/actions/getProperties"; // 아까 만든 서버 액션
-import { fetchComprehensiveData } from "./actions/getAnalyticsData";
+import { useRouter } from "next/navigation";
 
 export default function GASetupPage() {
+  const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
   const [properties, setProperties] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,8 +14,6 @@ export default function GASetupPage() {
     null
   );
   const [loading, setLoading] = useState(false);
-  // 분석 진행 상황을 표시할 state
-  const [status, setStatus] = useState<string>("");
 
   const handleSelect = (id: string) => {
     const cleanId = id.replace("properties/", ""); // 'properties/123' -> '123'
@@ -23,28 +22,10 @@ export default function GASetupPage() {
     alert(`선택된 속성 ID: ${cleanId} - 이제 이 ID로 AI 분석을 시작합니다!`);
   };
 
-  const handleAnalyze = async () => {
-    if (!session?.accessToken || !selectedPropertyId) return;
-
-    setStatus("GA4 데이터 긁어오는 중...");
-
-    try {
-      // 위에서 만든 Server Action 호출
-      const aiPrompt = await fetchComprehensiveData(
-        session.accessToken,
-        selectedPropertyId
-      );
-
-      console.log("----- AI에게 보낼 프롬프트 -----");
-      console.log(aiPrompt); // 콘솔에서 확인해 보세요!
-
-      setStatus("데이터 확보 완료! AI 분석 시작...");
-
-      // TODO: 여기서 이 'aiPrompt'를 ChatGPT/Claude API로 보내면 끝입니다.
-      // const result = await sendToGPT(aiPrompt);
-    } catch (err) {
-      console.error(err);
-      alert("분석 실패");
+  const handleStartChat = () => {
+    if (selectedPropertyId) {
+      // 3. 동적 경로로 이동!
+      router.push(`/${selectedPropertyId}/chat`);
     }
   };
 
@@ -97,17 +78,12 @@ export default function GASetupPage() {
       {selectedPropertyId && (
         <div className="mt-4 text-center">
           <button
-            onClick={handleAnalyze}
+            onClick={handleStartChat}
             disabled={loading}
             className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition"
           >
-            {loading ? "분석 중..." : "AI 분석 시작하기"}
+            AI와 채팅 시작하기
           </button>
-
-          {/* 상태 메시지 출력 */}
-          {status && (
-            <p className="mt-3 text-sm text-gray-600 animate-pulse">{status}</p>
-          )}
         </div>
       )}
 
