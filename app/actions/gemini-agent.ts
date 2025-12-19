@@ -55,7 +55,7 @@ export async function chatWithGemini(
   propertyId: string
 ) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-flash-latest",
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
