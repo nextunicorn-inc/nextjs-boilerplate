@@ -1,11 +1,11 @@
 "use server";
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { runDynamicReport } from "./ga4-tool"; // 아까 만든 만능 도구 가져오기
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { runDynamicReport } from "./ga4-tool";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// 1. AI가 사용할 도구 정의
+// 1. AI가 사용할 도구 정의 (타입 에러 수정됨)
 const tools = {
   functionDeclarations: [
     {
@@ -13,27 +13,30 @@ const tools = {
       description:
         "Google Analytics 4 데이터를 조회합니다. 날짜, 측정기준, 지표를 설정하여 호출하세요.",
       parameters: {
-        type: "OBJECT",
+        type: SchemaType.OBJECT, // 문자열 대신 SchemaType 사용
         properties: {
           startDate: {
-            type: "STRING",
+            type: SchemaType.STRING,
             description: "시작 날짜 (예: '30daysAgo', '2024-01-01')",
           },
-          endDate: { type: "STRING", description: "종료 날짜 (보통 'today')" },
+          endDate: {
+            type: SchemaType.STRING,
+            description: "종료 날짜 (보통 'today')",
+          },
           dimensions: {
-            type: "ARRAY",
-            items: { type: "STRING" },
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
             description:
               "분석 기준 (예: date, pageTitle, sessionSource, deviceCategory, country)",
           },
           metrics: {
-            type: "ARRAY",
-            items: { type: "STRING" },
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
             description:
               "수치 데이터 (예: activeUsers, screenPageViews, sessions, engagementRate)",
           },
           limit: {
-            type: "NUMBER",
+            type: SchemaType.NUMBER,
             description: "가져올 데이터 행 수 (기본값 10)",
           },
         },
@@ -48,9 +51,10 @@ export async function chatWithGemini(
   accessToken: string,
   propertyId: string
 ) {
-  // 2. 모델 초기화 (Gemini 1.5 Flash가 빠르고 무료 티어 제공)
+  // 2. 모델 초기화
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash",
+    // tools 배열 안에 위에서 만든 tools 객체를 넣습니다.
     tools: [tools],
   });
 
@@ -78,6 +82,8 @@ export async function chatWithGemini(
     console.log("🗣️ 사용자 질문:", userMessage);
     const result = await chat.sendMessage(userMessage);
     const response = result.response;
+
+    // functionCalls() 함수를 통해 도구 호출 여부 확인
     const functionCalls = response.functionCalls();
 
     // 4. AI가 "도구를 쓰겠다"고 했는지 확인
@@ -117,6 +123,6 @@ export async function chatWithGemini(
     return response.text();
   } catch (error) {
     console.error("Gemini Agent Error:", error);
-    return "죄송합니다. 분석 중 오류가 발생했습니다.";
+    return "죄송합니다. 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
   }
 }
