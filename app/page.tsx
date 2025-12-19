@@ -3,21 +3,49 @@
 import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { getGA4Properties } from "@/app/actions/getProperties"; // 아까 만든 서버 액션
+import { fetchComprehensiveData } from "./actions/getAnalyticsData";
 
 export default function GASetupPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [properties, setProperties] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
     null
   );
   const [loading, setLoading] = useState(false);
+  // 분석 진행 상황을 표시할 state
+  const [status, setStatus] = useState<string>("");
 
   const handleSelect = (id: string) => {
     const cleanId = id.replace("properties/", ""); // 'properties/123' -> '123'
     setSelectedPropertyId(cleanId);
     setIsModalOpen(false);
     alert(`선택된 속성 ID: ${cleanId} - 이제 이 ID로 AI 분석을 시작합니다!`);
+  };
+
+  const handleAnalyze = async () => {
+    if (!session?.accessToken || !selectedPropertyId) return;
+
+    setStatus("GA4 데이터 긁어오는 중...");
+
+    try {
+      // 위에서 만든 Server Action 호출
+      const aiPrompt = await fetchComprehensiveData(
+        session.accessToken,
+        selectedPropertyId
+      );
+
+      console.log("----- AI에게 보낼 프롬프트 -----");
+      console.log(aiPrompt); // 콘솔에서 확인해 보세요!
+
+      setStatus("데이터 확보 완료! AI 분석 시작...");
+
+      // TODO: 여기서 이 'aiPrompt'를 ChatGPT/Claude API로 보내면 끝입니다.
+      // const result = await sendToGPT(aiPrompt);
+    } catch (err) {
+      console.error(err);
+      alert("분석 실패");
+    }
   };
 
   // 세션이 생기면(로그인 성공 시) 자동으로 속성 리스트를 가져옴
@@ -41,7 +69,7 @@ export default function GASetupPage() {
     }
   }, [session]);
 
-  if (status === "loading") return <div>로딩 중...</div>;
+  if (sessionStatus === "loading") return <div>로딩 중...</div>;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white">
@@ -63,6 +91,23 @@ export default function GASetupPage() {
           >
             다른 속성 선택하기
           </button>
+        </div>
+      )}
+
+      {selectedPropertyId && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={handleAnalyze}
+            disabled={loading}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition"
+          >
+            {loading ? "분석 중..." : "AI 분석 시작하기"}
+          </button>
+
+          {/* 상태 메시지 출력 */}
+          {status && (
+            <p className="mt-3 text-sm text-gray-600 animate-pulse">{status}</p>
+          )}
         </div>
       )}
 
