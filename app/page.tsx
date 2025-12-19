@@ -163,7 +163,7 @@ function AnalyticsForm() {
             <div className="space-y-3">
               {/* 앰플리튜드는 API 구조상 키 직접 입력이 필수입니다 */}
               <input
-                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm text-gray-900"
                 type="password"
                 placeholder="API Key 입력"
                 value={credentials["amplitudeApiKey"] || ""}
@@ -172,7 +172,7 @@ function AnalyticsForm() {
                 }
               />
               <input
-                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm text-gray-900"
                 type="password"
                 placeholder="Secret Key 입력"
                 value={credentials["amplitudeSecretKey"] || ""}
