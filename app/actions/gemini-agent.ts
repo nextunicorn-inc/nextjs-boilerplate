@@ -22,7 +22,7 @@ export async function chatWithGemini(
   };
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest",
+    model: "gemini-flash-latest",
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
