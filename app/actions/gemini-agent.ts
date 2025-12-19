@@ -1,19 +1,23 @@
 "use server";
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import {
+  GoogleGenerativeAI,
+  SchemaType,
+  type Tool,
+} from "@google/generative-ai";
 import { runDynamicReport } from "./ga4-tool";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// 1. AI가 사용할 도구 정의 (타입 에러 수정됨)
-const tools = {
+// 1. Tool 타입을 명시하여 정의 (이제 빨간줄이 뜨지 않습니다)
+const ga4Tool: Tool = {
   functionDeclarations: [
     {
       name: "get_ga4_report",
       description:
         "Google Analytics 4 데이터를 조회합니다. 날짜, 측정기준, 지표를 설정하여 호출하세요.",
       parameters: {
-        type: SchemaType.OBJECT, // 문자열 대신 SchemaType 사용
+        type: SchemaType.OBJECT,
         properties: {
           startDate: {
             type: SchemaType.STRING,
@@ -54,8 +58,8 @@ export async function chatWithGemini(
   // 2. 모델 초기화
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash",
-    // tools 배열 안에 위에서 만든 tools 객체를 넣습니다.
-    tools: [tools],
+    // 💡 이제 'as any' 없이도 타입이 완벽하게 일치합니다.
+    tools: [ga4Tool],
   });
 
   const chat = model.startChat({
@@ -78,15 +82,12 @@ export async function chatWithGemini(
   });
 
   try {
-    // 3. 사용자 질문 전송
     console.log("🗣️ 사용자 질문:", userMessage);
     const result = await chat.sendMessage(userMessage);
     const response = result.response;
 
-    // functionCalls() 함수를 통해 도구 호출 여부 확인
     const functionCalls = response.functionCalls();
 
-    // 4. AI가 "도구를 쓰겠다"고 했는지 확인
     if (functionCalls && functionCalls.length > 0) {
       const call = functionCalls[0];
       console.log("🤖 Gemini가 도구 사용을 요청함:", call.name, call.args);
@@ -94,7 +95,6 @@ export async function chatWithGemini(
       if (call.name === "get_ga4_report") {
         const args = call.args as any;
 
-        // 5. 실제 GA4 API 실행 (Server Action)
         const apiResult = await runDynamicReport(accessToken, propertyId, {
           startDate: args.startDate,
           endDate: args.endDate,
@@ -105,12 +105,11 @@ export async function chatWithGemini(
 
         console.log("📊 데이터 조회 결과 확보 완료");
 
-        // 6. 조회된 데이터를 AI에게 다시 전달 (Context 주입)
         const finalResult = await chat.sendMessage([
           {
             functionResponse: {
               name: "get_ga4_report",
-              response: { result: apiResult }, // 결과값 전달
+              response: { result: apiResult },
             },
           },
         ]);
@@ -119,7 +118,6 @@ export async function chatWithGemini(
       }
     }
 
-    // 도구 사용 없이 그냥 대답한 경우
     return response.text();
   } catch (error) {
     console.error("Gemini Agent Error:", error);
