@@ -5,7 +5,7 @@ import { signIn, useSession } from "next-auth/react";
 import { getGA4Properties } from "@/app/actions/getProperties"; // 아까 만든 서버 액션
 
 export default function GASetupPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [properties, setProperties] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
@@ -40,6 +40,8 @@ export default function GASetupPage() {
       fetchProperties(session.accessToken as string);
     }
   }, [session]);
+
+  if (status === "loading") return <div>로딩 중...</div>;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white">
