@@ -7,7 +7,6 @@ import {
 } from "@google/generative-ai";
 import { Ga4Tool, AmplitudeTool, type AgentTool } from "./tools/definitions";
 
-// 등록된 도구 리스트
 const REGISTERED_TOOLS: AgentTool[] = [Ga4Tool, AmplitudeTool];
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -16,13 +15,16 @@ export async function chatWithGemini(
   userMessage: string,
   apiKeys: { [key: string]: string | undefined }
 ) {
-  // 1. 도구 설정
   const toolsConfig = {
     functionDeclarations: REGISTERED_TOOLS.map((tool) => tool.declaration),
   };
 
   const model = genAI.getGenerativeModel({
     model: "gemini-flash-latest",
+    // 🔥 [수정 1] 긴 리포트가 잘리지 않도록 토큰 한도 대폭 상향
+    generationConfig: {
+      maxOutputTokens: 8192,
+    },
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -44,40 +46,33 @@ export async function chatWithGemini(
     tools: [toolsConfig as any],
   });
 
-  // 2. 현재 날짜 정보 생성
   const today = new Date().toISOString().split("T")[0];
 
-  // 3. [핵심 수정] 시스템 프롬프트 강화: 기본 기간을 3개월(90일)로 변경
   const systemInstruction = `
-    당신은 데이터의 표면이 아닌 '원인(Root Cause)'을 파헤치는 수석 데이터 분석가(Lead Data Analyst)입니다.
+    당신은 데이터의 '원인(Root Cause)'을 파헤치는 수석 데이터 분석가(Lead Data Analyst)입니다.
 
     [절대 원칙]
     1. **단순 현황 나열 금지:** "사용자가 100명입니다"는 통찰이 아닙니다. "지난달 대비 20% 급락했습니다"가 통찰입니다.
     2. **비교 분석 필수:** 사용자가 기간을 명시하지 않으면, 기본 기간(최근 90일)뿐만 아니라 **'직전 90일' 데이터도 추가로 조회**하여 성장률(MoM, QoQ)을 계산하십시오. (도구를 2번 실행하라는 뜻입니다.)
-    3. **Drill-down(파고들기) 수행:** - 만약 '(not set)'이나 'Unassigned' 비율이 10% 이상이라면, 즉시 dimension을 ['landingPage', 'sessionSource']로 변경하여 **어떤 페이지/소스가 원인인지 추가 조회**하십시오.
-       - 특정 채널(예: Organic)이 급락했다면, 어떤 검색어(또는 페이지)가 범인인지 추가 조회하십시오.
-    4. **모호한 조언 금지:** "마케팅을 강화하세요" 같은 말은 하지 마십시오. "Organic 유입이 30% 빠진 '/pricing' 페이지의 SEO를 점검하세요"라고 구체적으로 지시하십시오.
-
-    [기본 분석 시나리오 (자동 실행)]
-    - Step 1: 전체 트래픽/이벤트 현황 조회 (Current Period)
-    - Step 2: 비교를 위한 과거 데이터 조회 (Previous Period)
-    - Step 3: (특이사항 발견 시) 원인 규명을 위한 상세 데이터 조회 (Drill-down)
-    - Step 4: 원인과 해결책이 포함된 최종 리포트 작성
+    3. **Drill-down 수행:** 특이점(급상승, 급락, Unassigned) 발견 시 즉시 상세 원인을 추가 조회하십시오.
+    
+    [기본 분석 시나리오]
+    - Step 1: 전체 트래픽 현황 (Current)
+    - Step 2: 과거 비교 (Previous)
+    - Step 3: 원인 상세 분석 (Drill-down)
+    - Step 4: 해결책 제안
 
     오늘 날짜: ${today}
   `;
 
   const chat = model.startChat({
     history: [
-      {
-        role: "user",
-        parts: [{ text: systemInstruction }],
-      },
+      { role: "user", parts: [{ text: systemInstruction }] },
       {
         role: "model",
         parts: [
           {
-            text: "알겠습니다. 사용자의 질문이 모호할 경우, 자동으로 최근 3개월(분기) 데이터를 조회하여 심층적인 인사이트를 제공하겠습니다.",
+            text: "네, 데이터를 집요하게 파고들어 원인과 해결책이 포함된 완벽한 리포트를 작성하겠습니다.",
           },
         ],
       },
@@ -87,6 +82,7 @@ export async function chatWithGemini(
   try {
     console.log("🗣️ 사용자 질문:", userMessage);
 
+    // 1. 첫 요청
     let result = await chat.sendMessage(userMessage);
     let response = result.response;
     let functionCalls = response.functionCalls();
@@ -94,15 +90,12 @@ export async function chatWithGemini(
     let loopCount = 0;
     const MAX_LOOPS = 10;
 
+    // 2. 데이터 수집 루프 (Agent Loop)
     while (functionCalls && functionCalls.length > 0 && loopCount < MAX_LOOPS) {
       loopCount++;
       const call = functionCalls[0];
-      console.log(
-        `🤖 [Loop ${loopCount}] 도구 실행 요청: ${call.name}`,
-        call.args
-      );
+      console.log(`🤖 [Loop ${loopCount}] 도구 실행: ${call.name}`, call.args);
 
-      // 🔍 도구 찾기 및 실행
       const targetTool = REGISTERED_TOOLS.find(
         (tool) => tool.name === call.name
       );
@@ -110,7 +103,6 @@ export async function chatWithGemini(
 
       if (targetTool) {
         try {
-          // 키 전달
           apiResult = await targetTool.execute(call.args, apiKeys);
         } catch (e: any) {
           apiResult = `Error executing tool: ${e.message}`;
@@ -119,8 +111,9 @@ export async function chatWithGemini(
         apiResult = `Error: Unknown tool '${call.name}'`;
       }
 
-      console.log(`📊 [Loop ${loopCount}] 데이터 확보 완료 (${call.name})`);
+      console.log(`📊 [Loop ${loopCount}] 데이터 확보 완료.`);
 
+      // 결과 전달 및 다음 행동 대기
       result = await chat.sendMessage([
         {
           functionResponse: {
@@ -134,9 +127,18 @@ export async function chatWithGemini(
       functionCalls = response.functionCalls();
     }
 
-    const finalText = response.text();
-    if (!finalText) return "분석을 완료했으나 답변을 생성하지 못했습니다.";
+    // 🔥 [수정 2] 루프가 끝난 후, '강제 종합 리포트' 요청
+    // 마지막 응답이 Step 4만 덜렁 있는 경우가 많으므로,
+    // "지금까지 모은 거 다 합쳐서 제대로 써줘"라고 명령을 한 번 더 보냅니다.
+    console.log("📝 최종 리포트 생성 요청 중...");
 
+    const finalRequest = await chat.sendMessage(
+      "지금까지 조회한 모든 데이터(Step 1~3 등)를 종합하여, 끊김 없이 완벽한 서론-본론-결론 구조의 최종 리포트를 작성해. Markdown 형식을 사용하여 가독성을 높여줘."
+    );
+
+    const finalText = finalRequest.response.text();
+
+    if (!finalText) return "분석을 완료했으나 리포트 생성에 실패했습니다.";
     return finalText;
   } catch (error: any) {
     console.error("🔥 Agent Error:", error);
