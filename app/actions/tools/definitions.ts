@@ -1,5 +1,3 @@
-"use server";
-
 import { runDynamicReport } from "./ga4-tool";
 import { fetchAmplitudeData } from "./amplitude-tool";
 import { FunctionDeclaration, SchemaType } from "@google/generative-ai";
