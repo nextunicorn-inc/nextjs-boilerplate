@@ -13,33 +13,33 @@ export default function GASetupPage() {
   );
   const [loading, setLoading] = useState(false);
 
-  // 세션이 생기면(로그인 성공 시) 자동으로 속성 리스트를 가져옴
-  useEffect(() => {
-    if (session?.accessToken && !selectedPropertyId) {
-      fetchProperties(session.accessToken as string);
-    }
-  }, [session]);
-
-  const fetchProperties = async (token: string) => {
-    setLoading(true);
-    const data = await getGA4Properties(token);
-    if (data) {
-      // 계정 요약 데이터에서 실제 속성(property)들만 추출하여 평탄화
-      const allProps = data.flatMap(
-        (account: any) => account.propertySummaries || []
-      );
-      setProperties(allProps);
-      setIsModalOpen(true);
-    }
-    setLoading(false);
-  };
-
   const handleSelect = (id: string) => {
     const cleanId = id.replace("properties/", ""); // 'properties/123' -> '123'
     setSelectedPropertyId(cleanId);
     setIsModalOpen(false);
     alert(`선택된 속성 ID: ${cleanId} - 이제 이 ID로 AI 분석을 시작합니다!`);
   };
+
+  // 세션이 생기면(로그인 성공 시) 자동으로 속성 리스트를 가져옴
+  useEffect(() => {
+    const fetchProperties = async (token: string) => {
+      setLoading(true);
+      const data = await getGA4Properties(token);
+      if (data) {
+        // 계정 요약 데이터에서 실제 속성(property)들만 추출하여 평탄화
+        const allProps = data.flatMap(
+          (account: any) => account.propertySummaries || []
+        );
+        setProperties(allProps);
+        setIsModalOpen(true);
+      }
+      setLoading(false);
+    };
+
+    if (session?.accessToken && !selectedPropertyId) {
+      fetchProperties(session.accessToken as string);
+    }
+  }, [session]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white">
