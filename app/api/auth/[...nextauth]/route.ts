@@ -11,7 +11,7 @@ const handler = NextAuth({
         params: {
           // GA4 데이터를 읽기 위한 권한 요청
           scope:
-            "openid email profile https://www.googleapis.com/auth/analytics.readonly",
+            "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/analytics.readonly https://www.googleapis.com/auth/analytics.edit",
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
