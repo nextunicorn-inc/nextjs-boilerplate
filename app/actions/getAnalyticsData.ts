@@ -50,7 +50,7 @@ export async function fetchComprehensiveData(
       // 2. Monthly Trend (12 months) - 성장세 분석용
       client.runReport({
         property,
-        dateRanges: [{ startDate: "12monthsAgo", endDate: "today" }],
+        dateRanges: [{ startDate: "365daysAgo", endDate: "today" }],
         dimensions: [{ name: "yearMonth" }],
         metrics: [
           { name: "activeUsers" },
