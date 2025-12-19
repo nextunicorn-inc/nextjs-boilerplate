@@ -55,8 +55,7 @@ export async function chatWithGemini(
   propertyId: string
 ) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-flash-latest",
-    // 💡 [핵심 수정] 안전 필터를 끕니다. (데이터 분석 시 필수)
+    model: "gemini-1.5-flash",
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -84,14 +83,16 @@ export async function chatWithGemini(
         role: "user",
         parts: [
           {
-            text: "당신은 전문 데이터 분석가입니다. 주어진 도구를 사용하여 데이터를 조회하고, 그 결과를 바탕으로 한국어로 친절하게 답변하세요.",
+            text: "당신은 전문 데이터 분석가입니다. 질문을 해결하기 위해 필요한 데이터가 있다면 도구를 여러 번 사용해도 좋습니다. 최종적으로 한국어로 요약된 인사이트를 제공하세요.",
           },
         ],
       },
       {
         role: "model",
         parts: [
-          { text: "네, 알겠습니다. GA4 데이터 분석을 도와드리겠습니다." },
+          {
+            text: "네, 알겠습니다. 데이터를 깊이 있게 분석하여 인사이트를 드리겠습니다.",
+          },
         ],
       },
     ],
@@ -99,20 +100,30 @@ export async function chatWithGemini(
 
   try {
     console.log("🗣️ 사용자 질문:", userMessage);
-    const result = await chat.sendMessage(userMessage);
-    const response = result.response;
 
-    // AI가 도구를 쓰려고 하는지 확인
-    const functionCalls = response.functionCalls();
+    // 1. 첫 요청 전송
+    let result = await chat.sendMessage(userMessage);
+    let response = result.response;
+    let functionCalls = response.functionCalls();
 
-    if (functionCalls && functionCalls.length > 0) {
+    // 🔄 [핵심 수정] while 루프를 사용하여 도구 호출이 없을 때까지 반복
+    // (최대 5회로 제한하여 무한 루프 방지)
+    let loopCount = 0;
+    const MAX_LOOPS = 5;
+
+    while (functionCalls && functionCalls.length > 0 && loopCount < MAX_LOOPS) {
+      loopCount++;
       const call = functionCalls[0];
-      console.log("🤖 Gemini가 도구 사용을 요청함:", call.name, call.args);
+      console.log(
+        `🤖 [Loop ${loopCount}] 도구 실행 요청:`,
+        call.name,
+        call.args
+      );
 
       if (call.name === "get_ga4_report") {
         const args = call.args as any;
 
-        // 실제 GA4 데이터 가져오기
+        // 2. 도구 실행
         const apiResult = await runDynamicReport(accessToken, propertyId, {
           startDate: args.startDate,
           endDate: args.endDate,
@@ -121,10 +132,12 @@ export async function chatWithGemini(
           limit: args.limit || 10,
         });
 
-        console.log("📊 데이터 조회 완료, AI에게 전달 중...");
+        console.log(
+          `📊 [Loop ${loopCount}] 데이터 확보 완료. 결과를 AI에게 전달합니다.`
+        );
 
-        // 데이터와 함께 최종 답변 요청
-        const finalResult = await chat.sendMessage([
+        // 3. 실행 결과를 AI에게 전달하고 **다음 반응**을 기다림
+        result = await chat.sendMessage([
           {
             functionResponse: {
               name: "get_ga4_report",
@@ -133,26 +146,21 @@ export async function chatWithGemini(
           },
         ]);
 
-        // 💡 [방어 코드] 답변이 비어있는지 확인
-        const finalText = finalResult.response.text();
-        if (!finalText) {
-          return "데이터는 조회했으나, AI가 답변을 생성하지 못했습니다. (빈 응답)";
-        }
-        return finalText;
+        // 4. AI의 새로운 응답 확인 (또 도구를 쓰려는지, 아니면 답변을 줄지)
+        response = result.response;
+        functionCalls = response.functionCalls();
       }
     }
 
-    // 도구 없이 바로 대답한 경우
-    const text = response.text();
-    if (!text) return "AI가 답변을 거부했습니다. (Safety Filter 가능성)";
+    // 루프가 끝나면 최종 텍스트 답변 반환
+    const finalText = response.text();
+    if (!finalText) return "분석을 완료했으나 답변을 생성하지 못했습니다.";
 
-    return text;
+    return finalText;
   } catch (error: any) {
     console.error("🔥 Gemini Agent Error:", error);
-
-    if (error.message?.includes("429")) {
-      return "잠시만 기다려주세요! (무료 버전 사용량 초과 20초 대기)";
-    }
-    return `분석 중 오류가 발생했습니다: ${error.message}`;
+    if (error.message?.includes("429"))
+      return "잠시만 기다려주세요! (무료 버전 사용량 초과)";
+    return `오류 발생: ${error.message}`;
   }
 }
