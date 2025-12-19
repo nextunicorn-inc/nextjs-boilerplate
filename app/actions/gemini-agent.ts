@@ -4,6 +4,7 @@ import {
   GoogleGenerativeAI,
   HarmCategory,
   HarmBlockThreshold,
+  FunctionCallingMode,
 } from "@google/generative-ai";
 import { Ga4Tool, AmplitudeTool, type AgentTool } from "./tools/definitions";
 
@@ -47,7 +48,7 @@ export async function chatWithGemini(
     // 🔥 [수정 1] 도구 설정에 'AUTO' 모드 명시 (선택적)
     // 대부분의 경우 기본값이지만, 명시적으로 선언하여 도구 사용을 장려함
     tools: [toolsConfig as any],
-    toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+    toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
   });
 
   const today = new Date().toISOString().split("T")[0];
