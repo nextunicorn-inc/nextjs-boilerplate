@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic"; // 1. dynamic import
 import { chatWithGemini } from "@/app/actions/gemini-agent";
 import { ANALYTICS_TOOLS } from "@/app/constants/tools-config";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // 2. 실제 채팅 로직이 담긴 컴포넌트
 // ssr: false 덕분에 브라우저 환경임이 100% 보장됩니다.
@@ -123,13 +125,65 @@ function ChatInterface() {
             }`}
           >
             <div
-              className={`p-4 rounded-2xl max-w-[85%] whitespace-pre-wrap leading-relaxed shadow-sm ${
+              className={`p-4 rounded-2xl max-w-[90%] shadow-sm ${
                 m.role === "user"
                   ? "bg-blue-600 text-white rounded-br-none"
-                  : "bg-gray-100 text-gray-900 rounded-bl-none border border-gray-200"
+                  : "bg-white text-gray-900 rounded-bl-none border border-gray-200" // 흰색 배경 추천
               }`}
             >
-              {m.content}
+              {/* 👇 그냥 {m.content} 대신 아래처럼 작성 */}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  // 스타일 커스터마이징 (Tailwind 사용)
+                  table: ({ node, ...props }) => (
+                    <div className="overflow-x-auto my-4 border rounded-lg">
+                      <table
+                        className="min-w-full divide-y divide-gray-200"
+                        {...props}
+                      />
+                    </div>
+                  ),
+                  thead: ({ node, ...props }) => (
+                    <thead className="bg-gray-50" {...props} />
+                  ),
+                  th: ({ node, ...props }) => (
+                    <th
+                      className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      {...props}
+                    />
+                  ),
+                  td: ({ node, ...props }) => (
+                    <td
+                      className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 border-t"
+                      {...props}
+                    />
+                  ),
+                  h1: ({ node, ...props }) => (
+                    <h1 className="text-2xl font-bold my-4" {...props} />
+                  ),
+                  h2: ({ node, ...props }) => (
+                    <h2
+                      className="text-xl font-bold my-3 text-blue-800"
+                      {...props}
+                    />
+                  ),
+                  h3: ({ node, ...props }) => (
+                    <h3 className="text-lg font-bold my-2" {...props} />
+                  ),
+                  ul: ({ node, ...props }) => (
+                    <ul
+                      className="list-disc list-inside my-2 space-y-1"
+                      {...props}
+                    />
+                  ),
+                  strong: ({ node, ...props }) => (
+                    <strong className="font-bold text-indigo-600" {...props} />
+                  ),
+                }}
+              >
+                {m.content}
+              </ReactMarkdown>
             </div>
           </div>
         ))}
