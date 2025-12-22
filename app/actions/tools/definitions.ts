@@ -78,5 +78,37 @@ export const AmplitudeTool: AgentTool = {
   },
 };
 
-// 4. [구현] (예시) 나중에 추가될 Mixpanel 도구
-// export const MixpanelTool: AgentTool = { ... }
+export const StripeTool: AgentTool = {
+  name: "get_stripe_report",
+  declaration: {
+    name: "get_stripe_report",
+    description:
+      "Get financial data report including Total Revenue, Payment Success/Failure rates from Stripe.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        startDate: {
+          type: SchemaType.STRING,
+          description: "Start date in YYYY-MM-DD format (e.g., '2024-01-01').",
+        },
+        endDate: {
+          type: SchemaType.STRING,
+          description: "End date in YYYY-MM-DD format (e.g., '2024-01-31').",
+        },
+      },
+      required: ["startDate", "endDate"],
+    },
+  },
+  execute: async (args: any, apiKeys: any) => {
+    if (!apiKeys.stripeSecretKey) {
+      return "Error: Stripe Secret Key is missing. Please ask user to provide it.";
+    }
+    // 상대 날짜(30daysAgo)를 받으면 변환하는 로직이 필요할 수 있으나,
+    // Agent가 YYYY-MM-DD로 주도록 유도하거나 여기서 간단히 처리
+    return await fetchStripeData(
+      args.startDate,
+      args.endDate,
+      apiKeys.stripeSecretKey
+    );
+  },
+};

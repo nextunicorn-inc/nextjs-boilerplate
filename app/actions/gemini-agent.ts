@@ -6,9 +6,14 @@ import {
   HarmBlockThreshold,
   FunctionCallingMode,
 } from "@google/generative-ai";
-import { Ga4Tool, AmplitudeTool, type AgentTool } from "./tools/definitions";
+import {
+  Ga4Tool,
+  AmplitudeTool,
+  type AgentTool,
+  StripeTool,
+} from "./tools/definitions";
 
-const REGISTERED_TOOLS: AgentTool[] = [Ga4Tool, AmplitudeTool];
+const REGISTERED_TOOLS: AgentTool[] = [Ga4Tool, AmplitudeTool, StripeTool];
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 

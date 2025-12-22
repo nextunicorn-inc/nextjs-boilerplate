@@ -54,17 +54,21 @@ export const ANALYTICS_TOOLS: AnalyticsToolUI[] = [
     ],
     docsUrl: "https://app.amplitude.com/analytics/Settings/Projects",
   },
-  // 예시: 믹스패널 추가 시 주석 해제만 하면 됨
-  /*
   {
-    id: "mixpanel",
-    name: "Mixpanel",
-    description: "이벤트 기반 프로덕트 분석",
-    icon: "🟣",
-    themeColor: "purple",
+    id: "stripe",
+    name: "Stripe",
+    description: "매출, 구독, 결제 실패율 분석",
+    icon: "💳",
+    themeColor: "violet", // 보라색 테마
+    docsUrl:
+      "https://dashboard.stripe.com/apikeys/create?name=MyAIDashboard&permissions[]=charges.read&permissions[]=subscriptions.read",
     inputs: [
-      { key: "mixpanelToken", label: "Project Token", type: "text", placeholder: "Token 입력" }
-    ]
-  }
-  */
+      {
+        key: "stripeSecretKey",
+        label: "Restricted Key (읽기 전용)",
+        type: "password",
+        placeholder: "Restricted Key 입력",
+      },
+    ],
+  },
 ];
