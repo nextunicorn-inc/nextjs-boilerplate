@@ -12,7 +12,8 @@ export interface AnalyticsToolUI {
   icon: string; // 이모지
   themeColor: string; // 배경색 스타일 (Tailwind class prefix)
   inputs: ToolInput[];
-  docsUrl?: string; // 키 발급 방법 링크
+  docsUrl?: string; // 키 발급 링크
+  docsLabel?: string; // 키 발급 링크 텍스트
 }
 
 // 🛠️ 여기에 툴을 추가하면 UI가 자동으로 생성됩니다.
