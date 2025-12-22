@@ -108,7 +108,7 @@ export async function chatWithGemini(
         apiResult = `Error: Unknown tool '${call.name}'`;
       }
 
-      console.log(`📊 [Loop ${loopCount}] 데이터 확보 완료.`);
+      console.log("📤 Output Data: ", apiResult);
 
       // 결과 전달
       result = await chat.sendMessage([
