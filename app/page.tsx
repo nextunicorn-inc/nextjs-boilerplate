@@ -188,6 +188,42 @@ function AnalyticsForm() {
               />
             </div>
           </div>
+
+          {/* 🟣 3. Stripe 섹션 (신규 추가됨) */}
+          <div className="p-5 border border-gray-200 rounded-xl bg-violet-50/30 hover:border-violet-200 transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl">💳</span>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-800">Stripe</h3>
+                <p className="text-xs text-gray-500">매출, 결제 실패율 분석</p>
+              </div>
+              {/* 👇 마법의 링크: 클릭 시 읽기 권한만 체크된 키 생성 화면으로 이동 */}
+              <a
+                href="https://dashboard.stripe.com/apikeys/create?name=MyAIDashboard&permissions[]=charges.read&permissions[]=subscriptions.read"
+                target="_blank"
+                className="text-xs text-violet-600 hover:underline font-medium"
+              >
+                키 발급 바로가기 ↗
+              </a>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">
+                  Secret Key (Restricted)
+                </label>
+                <input
+                  className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none transition-all text-sm text-gray-900"
+                  type="password"
+                  placeholder="rk_live_... 또는 sk_live_..."
+                  value={credentials["stripeSecretKey"] || ""}
+                  onChange={(e) =>
+                    handleInputChange("stripeSecretKey", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <button
