@@ -11,11 +11,6 @@ function AnalyticsForm() {
   const router = useRouter();
   const { data: session } = useSession();
 
-  // 설정 파일에서 각 툴의 설정을 미리 찾아서 변수에 할당 (렌더링 시 사용)
-  const ga4Config = ANALYTICS_TOOLS.find((t) => t.id === "ga4");
-  const amplitudeConfig = ANALYTICS_TOOLS.find((t) => t.id === "amplitude");
-  const stripeConfig = ANALYTICS_TOOLS.find((t) => t.id === "stripe");
-
   // 1. 초기값 로드
   const [credentials, setCredentials] = useState<Record<string, string>>(() => {
     if (typeof window === "undefined") return {};
@@ -32,6 +27,7 @@ function AnalyticsForm() {
 
   const [ga4Properties, setGa4Properties] = useState<Ga4Property[]>([]);
   const [isLoadingProps, setIsLoadingProps] = useState(false);
+  const [ga4LoadError, setGa4LoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (session?.accessToken) {
@@ -39,11 +35,26 @@ function AnalyticsForm() {
     }
   }, [session]);
 
+  // 설정 파일에서 각 툴의 설정을 미리 찾아서 변수에 할당 (렌더링 시 사용)
+  const ga4Config = ANALYTICS_TOOLS.find((t) => t.id === "ga4");
+  const amplitudeConfig = ANALYTICS_TOOLS.find((t) => t.id === "amplitude");
+  const stripeConfig = ANALYTICS_TOOLS.find((t) => t.id === "stripe");
+
   const loadProperties = async (token: string) => {
     setIsLoadingProps(true);
-    const props = await getGa4Properties(token);
-    setGa4Properties(props);
-    setIsLoadingProps(false);
+    setGa4LoadError(null); // 에러 초기화
+    try {
+      const props = await getGa4Properties(token);
+      if (!props || props.length === 0) {
+        setGa4LoadError("접근 가능한 속성이 없습니다.");
+      }
+      setGa4Properties(props || []);
+    } catch (e) {
+      console.error(e);
+      setGa4LoadError("목록을 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingProps(false);
+    }
   };
 
   const handleInputChange = (key: string, value: string) => {
@@ -68,7 +79,6 @@ function AnalyticsForm() {
       }
     });
 
-    const routeId = credentials["ga4PropertyId"] || "analytics-chat";
     router.push(`/chat`);
   };
 
@@ -147,8 +157,27 @@ function AnalyticsForm() {
                         ))}
                       </select>
                     ) : (
-                      <div className="text-sm text-red-500 p-2">
-                        접근 가능한 GA4 속성이 없습니다.
+                      <div className="flex flex-col gap-2 p-3 bg-red-50 border border-red-100 rounded-lg">
+                        <div className="text-sm text-red-500">
+                          {ga4LoadError || "접근 가능한 GA4 속성이 없습니다."}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              session.accessToken &&
+                              loadProperties(session.accessToken)
+                            }
+                            className="text-xs bg-white border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-50 text-gray-700"
+                          >
+                            ↻ 다시 시도
+                          </button>
+                          <button
+                            onClick={() => signIn("google")}
+                            className="text-xs bg-orange-100 text-orange-800 border border-orange-200 px-3 py-1.5 rounded hover:bg-orange-200"
+                          >
+                            🔑 토큰 갱신 (재로그인)
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
