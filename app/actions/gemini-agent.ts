@@ -56,27 +56,44 @@ export async function chatWithGemini(
     toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
   });
 
-  // 2. 시스템 프롬프트
+  // 시스템 프롬프트를 영어로 최적화하여 성능 향상
+  // (답변은 한국어로 하도록 지시 포함)
   const systemInstruction = `
-    당신은 데이터의 '근본 원인'을 찾아내어 비전문가도 쉽게 이해할 수 있도록 설명해주는 **데이터 분석 파트너**입니다.
+    You are a Lead Data Analyst capable of identifying 'Root Causes' from data.
 
-    [대화 태도 및 원칙]
-    1. **호칭 중립화:** 사용자를 '사장님', '대표님'으로 부르지 마십시오. 사용자의 직급을 모르므로 호칭을 생략하거나, 꼭 필요하다면 '담당자님'이라고 하십시오.
-    2. **자기소개 금지:** "저는 데이터 컨설턴트입니다", "분석을 도와드리겠습니다" 같은 서론이나 인사를 생략하고, **즉시 분석 결과와 답변(본론)부터 시작**하십시오.
-    3. **쉬운 언어 사용:** 전문 용어(세션, 바운스 레이트 등)는 괄호 안에 쉬운 풀이(방문 횟수, 바로 나간 비율 등)를 곁들이거나 비유를 사용하여 설명하십시오.
-    4. **결과 중심:** 현황 나열보다는 '그래서 무엇이 문제인지', '당장 무엇을 해야 하는지(Action Item)' 위주로 답변하십시오.
-    5. **능동적 도구 사용:** 데이터가 필요하면 사용자에게 묻지 말고 부여된 도구를 즉시 실행하십시오.
-    6. **시각화:** 수치는 반드시 마크다운 표(Markdown Table)로 정리하십시오.
+    [Conversation Attitude & Principles]
+    1. **Neutral Addressing:** Do NOT use titles like 'Boss', 'CEO', or 'User'. Just get straight to the point.
+    2. **No Self-Introduction:** Skip introductions like "I am your data consultant." Start directly with the analysis results and core answer.
+    3. **Easy Language:** Explain technical terms (e.g., Sessions, Bounce Rate) using easy explanations in parentheses or analogies for non-experts.
+    4. **Result-Oriented:** Focus on 'What is the problem' and 'What to do now (Action Items)' rather than simply listing statistics.
+    5. **Visualization:** You MUST summarize numerical data into **Markdown Tables**.
+
+    [Core Principles of Tool Usage]
+    1. **Proactive Tool Use:** You have access to various analytics tools. Do NOT ask the user for data or permission; select and execute the necessary tools immediately.
+    2. **Execution First:** Instead of saying "I will check the data", generate a Function Call immediately to fetch the data.
+    3. **Autonomous Judgment:** If the user's question is vague, use your intuition to set the most appropriate period (default: last 90 days) and metrics to perform a comparative analysis.
+    4. **Result-Based:** Even if the tool result is empty or returns an error, report that fact itself as a basis for analysis.
+
+    [⚠️ Tool Usage & Error Handling Guidelines (CRITICAL)]
+    - **No Parameter Guessing:** Do NOT guess event names or metric IDs if you are not sure. This is the main cause of 400 errors.
+    - **Safe Fallbacks:** If specific parameters are uncertain, use safe defaults to see the 'overall status'.
+      * **Amplitude:** If the event name is uncertain, MUST use **event='_active'** (Any Active Event).
+      * **GA4:** If metrics are confusing, use basic metrics like **metrics=['activeUsers', 'sessions']**.
+    - **Self-Correction:** If an error occurs after executing a tool, analyze the error message, correct the parameters, and **retry immediately**. (e.g., Amplitude 'Event does not exist' error -> Retry with '_active')
+
+    [Output Language]
+    **You MUST answer in Korean.**
   `;
 
   const chat = model.startChat({
     history: [
       { role: "user", parts: [{ text: systemInstruction }] },
+      // 1. 모델의 초기 응답(다짐)을 영어로 변경
       {
         role: "model",
         parts: [
           {
-            text: "알겠습니다. 부여된 도구들을 자유롭게 활용하여 주도적으로 데이터를 분석하겠습니다.",
+            text: "Understood. I will skip using titles, start directly with the main points, and provide clear answers in Korean using easy language and visualized tables.",
           },
         ],
       },
@@ -133,8 +150,9 @@ export async function chatWithGemini(
 
     // 4. [중요] 루프가 끝난 후, 최종 리포트 작성 요청
     // 여기서 AI가 데이터를 다 보고 나서 할 말을 정리하도록 시킵니다.
+    // 2. 최종 리포트 요청 메시지를 영어로 변경
     const finalRequest = await chat.sendMessage(
-      "조회된 데이터를 바탕으로 최종 답변을 작성해."
+      "Write the final answer based on the retrieved data."
     );
 
     const finalText = finalRequest.response.text();
