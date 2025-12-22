@@ -17,7 +17,7 @@ export async function fetchStripeData(
 ) {
   if (!apiKey) throw new Error("Stripe API Key가 누락되었습니다.");
 
-  const stripe = new Stripe(apiKey, { apiVersion: "2024-06-20" });
+  const stripe = new Stripe(apiKey, { apiVersion: "2025-12-15.clover" });
 
   // 날짜 변환 (Unix Timestamp)
   const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);

@@ -1,6 +1,7 @@
 import { runDynamicReport } from "./ga4-tool";
 import { fetchAmplitudeData } from "./amplitude-tool";
 import { FunctionDeclaration, SchemaType } from "@google/generative-ai";
+import { fetchStripeData } from "./stripe-tool";
 
 // 1. [규격] 모든 도구는 이 인터페이스를 따라야 합니다.
 export interface AgentTool {
