@@ -11,9 +11,15 @@ import {
   AmplitudeTool,
   type AgentTool,
   StripeTool,
+  SentryTool,
 } from "./tools/definitions";
 
-const REGISTERED_TOOLS: AgentTool[] = [Ga4Tool, AmplitudeTool, StripeTool];
+const REGISTERED_TOOLS: AgentTool[] = [
+  Ga4Tool,
+  AmplitudeTool,
+  StripeTool,
+  SentryTool,
+];
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 

@@ -2,6 +2,7 @@ import { runDynamicReport } from "./ga4-tool";
 import { fetchAmplitudeData } from "./amplitude-tool";
 import { FunctionDeclaration, SchemaType } from "@google/generative-ai";
 import { fetchStripeData } from "./stripe-tool";
+import { fetchSentryIssues } from "./sentry-tool";
 
 // 1. [규격] 모든 도구는 이 인터페이스를 따라야 합니다.
 export interface AgentTool {
@@ -110,6 +111,41 @@ export const StripeTool: AgentTool = {
       args.startDate,
       args.endDate,
       apiKeys.stripeSecretKey
+    );
+  },
+};
+
+export const SentryTool: AgentTool = {
+  name: "get_sentry_issues",
+  declaration: {
+    name: "get_sentry_issues",
+    description:
+      "Get a list of recent unresolved technical errors and bugs from Sentry.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        days: {
+          type: SchemaType.NUMBER,
+          description: "Lookback period in days (default: 14)",
+        },
+      },
+      required: [],
+    },
+  },
+  execute: async (args: any, apiKeys: any) => {
+    if (
+      !apiKeys.sentryAuthToken ||
+      !apiKeys.sentryOrg ||
+      !apiKeys.sentryProject
+    ) {
+      return "Error: Sentry configuration missing. Please provide Auth Token, Org Slug, and Project Slug.";
+    }
+    // days가 없으면 기본값 14
+    return await fetchSentryIssues(
+      apiKeys.sentryAuthToken,
+      apiKeys.sentryOrg,
+      apiKeys.sentryProject,
+      args.days || 14
     );
   },
 };

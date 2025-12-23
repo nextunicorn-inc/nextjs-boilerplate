@@ -39,6 +39,7 @@ function AnalyticsForm() {
   const ga4Config = ANALYTICS_TOOLS.find((t) => t.id === "ga4");
   const amplitudeConfig = ANALYTICS_TOOLS.find((t) => t.id === "amplitude");
   const stripeConfig = ANALYTICS_TOOLS.find((t) => t.id === "stripe");
+  const sentryConfig = ANALYTICS_TOOLS.find((t) => t.id === "sentry");
 
   const loadProperties = async (token: string) => {
     setIsLoadingProps(true);
@@ -267,6 +268,53 @@ function AnalyticsForm() {
                     </label>
                     <input
                       className={`w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-${stripeConfig.themeColor}-500 outline-none transition-all text-sm text-gray-900`}
+                      type={input.type}
+                      placeholder={input.placeholder}
+                      value={credentials[input.key] || ""}
+                      onChange={(e) =>
+                        handleInputChange(input.key, e.target.value)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 🔴 4. Sentry 섹션 (신규 추가됨) */}
+          {sentryConfig && (
+            <div
+              className={`p-5 border border-gray-200 rounded-xl bg-${sentryConfig.themeColor}-50/30 hover:border-${sentryConfig.themeColor}-200 transition-all`}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">{sentryConfig.icon}</span>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-800">
+                    {sentryConfig.name}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {sentryConfig.description}
+                  </p>
+                </div>
+                {sentryConfig.docsUrl && (
+                  <a
+                    href={sentryConfig.docsUrl}
+                    target="_blank"
+                    className={`text-xs text-${sentryConfig.themeColor}-600 hover:underline font-medium`}
+                  >
+                    {sentryConfig.docsLabel || "키 확인하기 ↗"}
+                  </a>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {sentryConfig.inputs.map((input) => (
+                  <div key={input.key}>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">
+                      {input.label}
+                    </label>
+                    <input
+                      className={`w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-${sentryConfig.themeColor}-500 outline-none transition-all text-sm text-gray-900`}
                       type={input.type}
                       placeholder={input.placeholder}
                       value={credentials[input.key] || ""}

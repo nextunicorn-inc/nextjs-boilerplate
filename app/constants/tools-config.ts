@@ -72,4 +72,33 @@ export const ANALYTICS_TOOLS: AnalyticsToolUI[] = [
       },
     ],
   },
+  {
+    id: "sentry",
+    name: "Sentry",
+    description: "서버 에러, 버그, 기술적 이슈 분석",
+    icon: "🚨",
+    themeColor: "rose", // 붉은색 테마
+    docsUrl: "https://sentry.io/settings/account/api/auth-tokens/",
+    docsLabel: "Auth Token 발급하기 ↗",
+    inputs: [
+      {
+        key: "sentryAuthToken",
+        label: "Auth Token",
+        type: "password",
+        placeholder: "sntry_... 로 시작하는 토큰",
+      },
+      {
+        key: "sentryOrg",
+        label: "Organization Slug",
+        type: "text",
+        placeholder: "예: my-company (URL에서 확인 가능)",
+      },
+      {
+        key: "sentryProject",
+        label: "Project Slug",
+        type: "text",
+        placeholder: "예: nextjs-project",
+      },
+    ],
+  },
 ];
