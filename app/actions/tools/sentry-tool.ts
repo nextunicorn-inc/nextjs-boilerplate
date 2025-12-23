@@ -42,14 +42,15 @@ export async function fetchSentryIssues(
       // 제목이 너무 길면 자르기
       const title = issue.title.replace(/[\r\n]/g, " ").substring(0, 30);
       const message = (issue.culprit || "").substring(0, 40);
-      
-      report += `${title} | ${message} | ${issue.count} | ${new Date(issue.lastSeen).toISOString().split('T')[0]} | ${issue.level}\n`;
+
+      report += `${title} | ${message} | ${issue.count} | ${
+        new Date(issue.lastSeen).toISOString().split("T")[0]
+      } | ${issue.level}\n`;
     });
 
     report += `\n(Tip: 'count'가 높거나 'level'이 'fatal'인 이슈는 즉시 해결해야 합니다.)`;
 
     return report;
-
   } catch (error: any) {
     // Sentry는 권한 에러가 잦으므로 힌트 제공
     if (error.message.includes("401") || error.message.includes("403")) {
@@ -58,46 +59,3 @@ export async function fetchSentryIssues(
     return `Error fetching Sentry data: ${error.message}`;
   }
 }
-```
-
----
-
-### 3단계: 도구 등록 (`app/actions/tools/definitions.ts`)
-
-Stripe 도구 밑에 Sentry 도구도 등록합니다.
-
-```typescript
-// ... imports
-import { fetchSentryIssues } from "./sentry-tool"; // 추가
-
-// ...
-
-export const SentryTool: AgentTool = {
-  name: "get_sentry_issues",
-  declaration: {
-    name: "get_sentry_issues",
-    description: "Get a list of recent unresolved technical errors and bugs from Sentry.",
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        days: { 
-          type: SchemaType.NUMBER, 
-          description: "Lookback period in days (default: 14)" 
-        },
-      },
-      required: [],
-    },
-  },
-  execute: async (args: any, apiKeys: any) => {
-    if (!apiKeys.sentryAuthToken || !apiKeys.sentryOrg || !apiKeys.sentryProject) {
-      return "Error: Sentry configuration missing. Please provide Auth Token, Org Slug, and Project Slug.";
-    }
-    // days가 없으면 기본값 14
-    return await fetchSentryIssues(
-      apiKeys.sentryAuthToken, 
-      apiKeys.sentryOrg, 
-      apiKeys.sentryProject, 
-      args.days || 14
-    );
-  },
-};
