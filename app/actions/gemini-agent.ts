@@ -62,10 +62,18 @@ export async function chatWithGemini(
     toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
   });
 
-  // 시스템 프롬프트를 영어로 최적화하여 성능 향상
-  // (답변은 한국어로 하도록 지시 포함)
+  // 1. [핵심] 현재 날짜 및 연도 계산
+  const todayDate = new Date();
+  const todayString = todayDate.toISOString().split("T")[0]; // YYYY-MM-DD
+  const currentYear = todayDate.getFullYear(); // YYYY
+
+  // 2. 시스템 프롬프트에 날짜 정보 주입
   const systemInstruction = `
     You are a Lead Data Analyst capable of identifying 'Root Causes' from data.
+
+    [Critical Info]
+    - **Current Date:** ${todayString} (Year: ${currentYear})
+    - If the user does not specify a year, **ALWAYS assume the current year (${currentYear})**. Do NOT use past years like 2023 or 2024 unless explicitly asked.
 
     [Conversation Attitude & Principles]
     1. **Neutral Addressing:** Do NOT use titles like 'Boss', 'CEO', or 'User'. Just get straight to the point.
