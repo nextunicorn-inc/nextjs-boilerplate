@@ -85,21 +85,46 @@ function AnalyticsForm() {
     router.push(`/chat`);
   };
 
+  // 🔍 [추가] 도구별 연동 상태 확인 함수
+  const checkConnected = (toolId: string) => {
+    const tool = ANALYTICS_TOOLS.find((t) => t.id === toolId);
+    if (!tool) return false;
+
+    // 모든 입력 필드에 값이 있어야 연동된 것으로 간주
+    return tool.inputs.every((input) => {
+      const val = credentials[input.key];
+      return val && val.trim().length > 0;
+    });
+  };
+
   // 2. [구조 개선] OAuth 툴(GA4, GSC)별 렌더링 로직 분리
   const renderOAuthToolUI = (tool: (typeof ANALYTICS_TOOLS)[0]) => {
+    const isConnected = checkConnected(tool.id);
+
     if (tool.id === "ga4") {
       return (
         <div key={tool.id}>
-          <label className="block text-xs font-bold text-orange-600 mb-1">
-            📊 {tool.name}
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-bold text-orange-600">
+              📊 {tool.name}
+            </label>
+            {isConnected && (
+              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                연동됨
+              </span>
+            )}
+          </div>
           {isLoadingProps ? (
             <div className="p-2.5 text-sm text-gray-400 bg-gray-100 rounded-lg animate-pulse">
               목록을 불러오는 중...
             </div>
           ) : (
             <select
-              className="w-full border border-gray-300 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+              className={`w-full border p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none ${
+                isConnected
+                  ? "border-green-500 bg-green-50/30"
+                  : "border-gray-300 bg-white"
+              }`}
               value={credentials["ga4PropertyId"] || ""}
               onChange={(e) =>
                 handleInputChange("ga4PropertyId", e.target.value)
@@ -120,16 +145,27 @@ function AnalyticsForm() {
     if (tool.id === "gsc") {
       return (
         <div key={tool.id}>
-          <label className="block text-xs font-bold text-teal-600 mb-1">
-            🔍 {tool.name}
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-bold text-teal-600">
+              🔍 {tool.name}
+            </label>
+            {isConnected && (
+              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                연동됨
+              </span>
+            )}
+          </div>
           {isLoadingProps ? (
             <div className="p-2.5 text-sm text-gray-400 bg-gray-100 rounded-lg animate-pulse">
               목록을 불러오는 중...
             </div>
           ) : (
             <select
-              className="w-full border border-gray-300 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+              className={`w-full border p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none ${
+                isConnected
+                  ? "border-green-500 bg-green-50/30"
+                  : "border-gray-300 bg-white"
+              }`}
               value={credentials["gscSiteUrl"] || ""}
               onChange={(e) => handleInputChange("gscSiteUrl", e.target.value)}
             >
@@ -222,47 +258,68 @@ function AnalyticsForm() {
               Advanced Connect (API Key)
             </h2>
 
-            {apiKeyTools.map((tool) => (
-              <div
-                key={tool.id}
-                className={`p-5 border border-gray-200 rounded-xl bg-${tool.themeColor}-50/30 hover:border-${tool.themeColor}-200 transition-all`}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-2xl">{tool.icon}</span>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-800">{tool.name}</h3>
-                  </div>
-                  {tool.docsUrl && (
-                    <a
-                      href={tool.docsUrl}
-                      target="_blank"
-                      className={`text-xs text-${tool.themeColor}-600 hover:underline font-medium`}
-                    >
-                      {tool.docsLabel || "키 확인 ↗"}
-                    </a>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  {tool.inputs.map((input) => (
-                    <div key={input.key}>
-                      <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">
-                        {input.label}
-                      </label>
-                      <input
-                        className={`w-full border border-gray-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-${tool.themeColor}-500 outline-none transition-all text-gray-900`}
-                        type={input.type}
-                        placeholder={input.placeholder}
-                        value={credentials[input.key] || ""}
-                        onChange={(e) =>
-                          handleInputChange(input.key, e.target.value)
-                        }
-                      />
+            {apiKeyTools.map((tool) => {
+              const isConnected = checkConnected(tool.id);
+              return (
+                <div
+                  key={tool.id}
+                  className={`p-5 border rounded-xl bg-${
+                    tool.themeColor
+                  }-50/30 transition-all ${
+                    isConnected
+                      ? `border-${tool.themeColor}-500 shadow-sm` // 연동 시 테두리 색상 강조
+                      : `border-gray-200 hover:border-${tool.themeColor}-200`
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-2xl">{tool.icon}</span>
+                    <div className="flex-1 flex items-center gap-2">
+                      <h3 className="font-bold text-gray-800">{tool.name}</h3>
+                      {/* 🔥 [추가] 연동 상태 배지 */}
+                      {isConnected && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold border border-green-200">
+                          연동됨
+                        </span>
+                      )}
                     </div>
-                  ))}
+                    {tool.docsUrl && (
+                      <a
+                        href={tool.docsUrl}
+                        target="_blank"
+                        className={`text-xs text-${tool.themeColor}-600 hover:underline font-medium`}
+                      >
+                        {tool.docsLabel || "키 확인 ↗"}
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {tool.inputs.map((input) => (
+                      <div key={input.key}>
+                        <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">
+                          {input.label}
+                        </label>
+                        <input
+                          className={`w-full border p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-${
+                            tool.themeColor
+                          }-500 outline-none transition-all text-gray-900 ${
+                            credentials[input.key]
+                              ? "bg-white"
+                              : "bg-white border-gray-300"
+                          }`}
+                          type={input.type}
+                          placeholder={input.placeholder}
+                          value={credentials[input.key] || ""}
+                          onChange={(e) =>
+                            handleInputChange(input.key, e.target.value)
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
