@@ -6,6 +6,7 @@ export interface Ga4Property {
   displayName: string; // "My Website"
 }
 
+// 구글 애널리틱스 4 속성 목록 가져오기
 export async function getGa4Properties(
   accessToken: string
 ): Promise<Ga4Property[]> {

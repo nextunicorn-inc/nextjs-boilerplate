@@ -57,8 +57,10 @@ function ChatInterface() {
     // 4. 전송 시점에도 동적으로 키 수집
     const apiKeys: Record<string, string | undefined> = {
       ga4AccessToken: session?.accessToken,
+      gscAccessToken: session?.accessToken, // GSC도 구글 토큰 공유
     };
 
+    // 나머지 키는 로컬 스토리지에서 자동 매핑 (tools-config 기반)
     ANALYTICS_TOOLS.forEach((tool) => {
       tool.inputs.forEach((input) => {
         const val = localStorage.getItem(input.key);

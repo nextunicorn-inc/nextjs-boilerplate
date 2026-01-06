@@ -3,6 +3,7 @@ import { fetchAmplitudeData } from "./amplitude-tool";
 import { FunctionDeclaration, SchemaType } from "@google/generative-ai";
 import { fetchStripeData } from "./stripe-tool";
 import { fetchSentryIssues } from "./sentry-tool";
+import { fetchGscData } from "./gsc-tool";
 
 // 1. [규격] 모든 도구는 이 인터페이스를 따라야 합니다.
 export interface AgentTool {
@@ -146,6 +147,42 @@ export const SentryTool: AgentTool = {
       apiKeys.sentryOrg,
       apiKeys.sentryProject,
       args.days || 14
+    );
+  },
+};
+
+export const GscTool: AgentTool = {
+  name: "get_gsc_report",
+  declaration: {
+    name: "get_gsc_report",
+    description:
+      "Get SEO performance data (clicks, impressions, ctr, position) from Google Search Console. Use this for questions about 'Google search results', 'keywords', or 'SEO'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        startDate: { type: SchemaType.STRING, description: "YYYY-MM-DD" },
+        endDate: { type: SchemaType.STRING, description: "YYYY-MM-DD" },
+        dimensions: {
+          type: SchemaType.ARRAY,
+          items: { type: SchemaType.STRING },
+          description:
+            "Group by: 'query' (keywords), 'page', 'country', 'device'",
+        },
+      },
+      required: ["startDate", "endDate"],
+    },
+  },
+  execute: async (args: any, apiKeys: any) => {
+    // GSC는 구글 토큰(gscAccessToken)과 사이트 URL을 사용합니다.
+    if (!apiKeys.gscAccessToken || !apiKeys.gscSiteUrl) {
+      return "Error: GSC connection missing. Please provide Google Login and Site URL.";
+    }
+    return await fetchGscData(
+      apiKeys.gscAccessToken,
+      apiKeys.gscSiteUrl,
+      args.startDate,
+      args.endDate,
+      args.dimensions || ["query"]
     );
   },
 };

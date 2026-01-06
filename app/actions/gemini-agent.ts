@@ -12,10 +12,12 @@ import {
   type AgentTool,
   StripeTool,
   SentryTool,
+  GscTool,
 } from "./tools/definitions";
 
 const REGISTERED_TOOLS: AgentTool[] = [
   Ga4Tool,
+  GscTool,
   AmplitudeTool,
   StripeTool,
   SentryTool,
