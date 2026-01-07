@@ -1,74 +1,68 @@
 "use server";
 
 export async function fetchAmplitudeData(
-  apiKey: string | undefined,
-  secretKey: string | undefined,
-  params: {
-    start: string;
-    end: string;
-    event: string;
-    groupBy?: string;
-  }
+  apiKey: string,
+  secretKey: string,
+  params: { start: string; end: string; event: string; groupBy?: string }
 ) {
-  // 1. 키가 없는 경우 명확한 에러 메시지 반환 (AI가 이걸 보고 사용자에게 요청함)
-  if (!apiKey || !secretKey) {
-    return "ERROR: AMPLITUDE_KEY_MISSING. (사용자가 앰플리튜드 키를 연동하지 않았습니다. 사용자에게 키를 등록해달라고 요청하세요.)";
-  }
+  // Segmentation API 엔드포인트
+  const endpoint = "https://amplitude.com/api/2/events/segmentation";
 
-  // Amplitude Segmentation API 엔드포인트
-  const url = "https://amplitude.com/api/2/events/segmentation";
-
-  // Basic Auth 인코딩
+  // Basic Auth 헤더 생성
   const auth = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
 
-  // 쿼리 파라미터 구성
-  const query = new URLSearchParams({
+  // 파라미터 구성
+  const queryParams = new URLSearchParams({
     e: JSON.stringify({ event_type: params.event }),
     start: params.start,
     end: params.end,
-    i: "30", // 30일 간격 (필요에 따라 1로 설정하여 일별 조회 가능)
   });
 
   if (params.groupBy) {
-    query.append("g", params.groupBy);
+    queryParams.append("g", params.groupBy);
   }
 
-  try {
-    const response = await fetch(`${url}?${query.toString()}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Basic ${auth}`,
-      },
-    });
+  // try-catch 없이 요청하여 네트워크 에러 등은 상위로 전파
+  const response = await fetch(`${endpoint}?${queryParams}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Amplitude API Error: ${response.status} ${errorText}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = `Amplitude API Error: ${response.status}`;
+
+    try {
+      // 에러 메시지가 JSON이면 파싱해서 상세 내용을 추출
+      const errorJson = JSON.parse(errorText);
+
+      // Amplitude 에러 구조 예: {"error": {"message": "...", "metadata": {"details": "..."}}}
+      // 가장 구체적인 에러 메시지 순서로 탐색
+      const detailMsg =
+        errorJson.error?.metadata?.details || // 1. 상세 디테일 (Invalid API Key 등)
+        errorJson.error?.message || // 2. 에러 메시지
+        errorJson.message || // 3. 최상위 메시지
+        (typeof errorJson.error === "string" ? errorJson.error : null); // 4. 에러가 문자열인 경우
+
+      if (detailMsg) {
+        errorMessage += ` - ${detailMsg}`;
+      } else {
+        // 객체 구조를 알 수 없는 경우 문자열로 변환하여 첨부 (방어 로직)
+        const fallbackObj = errorJson.error || errorJson;
+        errorMessage += ` - ${JSON.stringify(fallbackObj)}`;
+      }
+    } catch {
+      // JSON 파싱 실패 시 원본 텍스트 사용
+      errorMessage += ` ${errorText}`;
     }
 
-    const data = await response.json();
-
-    // --- AI가 읽기 편하게 데이터 포맷팅 (CSV 스타일) ---
-    let output = `[Amplitude Report: ${params.event}]\n`;
-
-    // 날짜 헤더 (xValues)
-    const dates = data.data.xValues;
-    output += `Date | ${dates.join(" | ")} |\n`;
-
-    // 데이터 행 (series)
-    data.data.series.forEach((row: any[], index: number) => {
-      const label = data.data.seriesLabels
-        ? data.data.seriesLabels[index]
-        : "Total";
-      // groupBy 결과가 있으면 라벨에 표시
-      const groupName = Array.isArray(label) ? label.join("/") : "All Users";
-
-      output += `${groupName} | ${row.join(" | ")} |\n`;
-    });
-
-    return output;
-  } catch (error: any) {
-    console.error("Amplitude Tool Error:", error);
-    return `Error fetching Amplitude data: ${error.message}`;
+    throw new Error(errorMessage);
   }
+
+  const data = await response.json();
+  return data;
 }

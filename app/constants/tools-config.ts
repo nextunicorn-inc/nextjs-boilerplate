@@ -75,53 +75,53 @@ export const ANALYTICS_TOOLS: AnalyticsToolUI[] = [
       },
     ],
   },
-  {
-    id: "stripe",
-    name: "Stripe",
-    description: "매출, 결제 실패율 분석",
-    icon: "💳",
-    themeColor: "violet",
-    connectionType: "apikey",
-    docsUrl:
-      "https://dashboard.stripe.com/apikeys/create?name=MyAIDashboard&permissions[]=charges.read&permissions[]=subscriptions.read",
-    docsLabel: "키 발급 바로가기 ↗",
-    inputs: [
-      {
-        key: "stripeSecretKey",
-        label: "Secret Key (Restricted)",
-        type: "password",
-        placeholder: "sk_live_... 또는 rk_live_...",
-      },
-    ],
-  },
-  {
-    id: "sentry",
-    name: "Sentry",
-    description: "서버 에러, 버그, 기술적 이슈 분석",
-    icon: "🚨",
-    themeColor: "rose",
-    connectionType: "apikey",
-    docsUrl: "https://sentry.io/settings/account/api/auth-tokens/",
-    docsLabel: "Auth Token 만들기 ↗",
-    inputs: [
-      {
-        key: "sentryAuthToken",
-        label: "Auth Token",
-        type: "password",
-        placeholder: "sntry_...",
-      },
-      {
-        key: "sentryOrg",
-        label: "Organization Slug",
-        type: "text",
-        placeholder: "예: my-company",
-      },
-      {
-        key: "sentryProject",
-        label: "Project Slug",
-        type: "text",
-        placeholder: "예: nextjs-project",
-      },
-    ],
-  },
+  // {
+  //   id: "stripe",
+  //   name: "Stripe",
+  //   description: "매출, 결제 실패율 분석",
+  //   icon: "💳",
+  //   themeColor: "violet",
+  //   connectionType: "apikey",
+  //   docsUrl:
+  //     "https://dashboard.stripe.com/apikeys/create?name=MyAIDashboard&permissions[]=charges.read&permissions[]=subscriptions.read",
+  //   docsLabel: "키 발급 바로가기 ↗",
+  //   inputs: [
+  //     {
+  //       key: "stripeSecretKey",
+  //       label: "Secret Key (Restricted)",
+  //       type: "password",
+  //       placeholder: "sk_live_... 또는 rk_live_...",
+  //     },
+  //   ],
+  // },
+  // {
+  //   id: "sentry",
+  //   name: "Sentry",
+  //   description: "서버 에러, 버그, 기술적 이슈 분석",
+  //   icon: "🚨",
+  //   themeColor: "rose",
+  //   connectionType: "apikey",
+  //   docsUrl: "https://sentry.io/settings/account/api/auth-tokens/",
+  //   docsLabel: "Auth Token 만들기 ↗",
+  //   inputs: [
+  //     {
+  //       key: "sentryAuthToken",
+  //       label: "Auth Token",
+  //       type: "password",
+  //       placeholder: "sntry_...",
+  //     },
+  //     {
+  //       key: "sentryOrg",
+  //       label: "Organization Slug",
+  //       type: "text",
+  //       placeholder: "예: my-company",
+  //     },
+  //     {
+  //       key: "sentryProject",
+  //       label: "Project Slug",
+  //       type: "text",
+  //       placeholder: "예: nextjs-project",
+  //     },
+  //   ],
+  // },
 ];

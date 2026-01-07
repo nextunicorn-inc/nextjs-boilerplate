@@ -4,23 +4,20 @@ import {
   GoogleGenerativeAI,
   HarmCategory,
   HarmBlockThreshold,
-  FunctionCallingMode,
 } from "@google/generative-ai";
 import {
   Ga4Tool,
   AmplitudeTool,
-  type AgentTool,
-  StripeTool,
-  SentryTool,
   GscTool,
+  type AgentTool,
 } from "./tools/definitions";
 
 const REGISTERED_TOOLS: AgentTool[] = [
   Ga4Tool,
   GscTool,
   AmplitudeTool,
-  StripeTool,
-  SentryTool,
+  // StripeTool,
+  // SentryTool,
 ];
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -29,17 +26,13 @@ export async function chatWithGemini(
   userMessage: string,
   apiKeys: { [key: string]: string | undefined }
 ) {
-  // 1. 도구 정의
   const toolsConfig = {
     functionDeclarations: REGISTERED_TOOLS.map((tool) => tool.declaration),
   };
 
   const model = genAI.getGenerativeModel({
     model: "gemini-flash-latest",
-    generationConfig: {
-      maxOutputTokens: 8192,
-      temperature: 0.5,
-    },
+    generationConfig: { maxOutputTokens: 8192, temperature: 0.5 },
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -58,58 +51,67 @@ export async function chatWithGemini(
         threshold: HarmBlockThreshold.BLOCK_NONE,
       },
     ],
-    // 🔥 [수정 1] 도구 설정에 'AUTO' 모드 명시 (선택적)
-    // 대부분의 경우 기본값이지만, 명시적으로 선언하여 도구 사용을 장려함
     tools: [toolsConfig as any],
-    toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
+    toolConfig: { functionCallingConfig: { mode: "AUTO" } },
   });
 
-  // 1. [핵심] 현재 날짜 및 연도 계산
   const todayDate = new Date();
-  const todayString = todayDate.toISOString().split("T")[0]; // YYYY-MM-DD
-  const currentYear = todayDate.getFullYear(); // YYYY
+  const todayString = todayDate.toISOString().split("T")[0];
+  const currentYear = todayDate.getFullYear();
 
-  // 2. 시스템 프롬프트에 날짜 정보 주입
+  // 🔥 [업그레이드] 시스템 프롬프트: 날짜 계산, GSC 에러 방지, 환각 방지 강화
   const systemInstruction = `
-    You are a Lead Data Analyst capable of identifying 'Root Causes' from data.
+    You are a friendly and professional 'Data Analysis Partner' for non-technical business stakeholders.
 
-    [Critical Info]
+    [Critical Context]
     - **Current Date:** ${todayString} (Year: ${currentYear})
-    - If the user does not specify a year, **ALWAYS assume the current year (${currentYear})**. Do NOT use past years like 2023 or 2024 unless explicitly asked.
+    - **Period Calculation:** - "Last Month" or "Recent Month" = From (Today - 30 days) to (Today).
+      - Do NOT assume a 2-month range for "1 month". Be precise with dates.
+    - **Default Period:** If unspecified, assume the **last 90 days** (Quarterly view).
 
-    [Conversation Attitude & Principles]
-    1. **Neutral Addressing:** Do NOT use titles like 'Boss', 'CEO', or 'User'. Just get straight to the point.
-    2. **No Self-Introduction:** Skip introductions like "I am your data consultant." Start directly with the analysis results and core answer.
-    3. **Easy Language:** Explain technical terms (e.g., Sessions, Bounce Rate) using easy explanations in parentheses or analogies for non-experts.
-    4. **Result-Oriented:** Focus on 'What is the problem' and 'What to do now (Action Items)' rather than simply listing statistics.
-    5. **Visualization:** You MUST summarize numerical data into **Markdown Tables**.
+    [Tone & Style Guidelines (Very Important)]
+    1. **NO Jargon / Easy Language:** Avoid abbreviations like "CTR", "SEO" alone. Use easy explanations in parentheses.
+    2. **NO Process Description:** - Do NOT describe what you did (e.g., "I checked the data...", "I called the tool...").
+       - Do NOT say "I will check...".
+       - **Just state the INSIGHTS directly.** (e.g., "The bounce rate increased because of channel X.")
+    3. **Direct & Clean:** Remove grand titles. Start directly with the summary.
+    4. **Visual Distinction:** Use 🟢(Positive) and 🔴(Negative) emojis.
 
-    [Core Principles of Tool Usage]
-    1. **Proactive Tool Use:** You have access to various analytics tools. Do NOT ask the user for data or permission; select and execute the necessary tools immediately.
-    2. **Execution First:** Instead of saying "I will check the data", generate a Function Call immediately to fetch the data.
-    3. **Autonomous Judgment:** If the user's question is vague, use your intuition to set the most appropriate period (default: last 90 days) and metrics to perform a comparative analysis.
-    4. **Result-Based:** Even if the tool result is empty or returns an error, report that fact itself as a basis for analysis.
+    [Analysis Strategy (CRITICAL)]
+    - **Compare:** Always compare Current vs Previous period.
+    - **Deep Dive NOW (Do NOT Defer):** - If you need more detailed data (e.g., specific keywords, landing pages) to explain a trend, **EXECUTE the tool immediately within this session.** - **NEVER** suggest "analyzing detailed data" as an Action Plan. You must do it yourself right now.
+    - **Cross-Check:** Traffic up but Revenue down? Check Errors or Conversion Rate.
 
-    [⚠️ Tool Usage & Error Handling Guidelines (CRITICAL)]
-    - **No Parameter Guessing:** Do NOT guess event names or metric IDs if you are not sure. This is the main cause of 400 errors.
-    - **Safe Fallbacks:** If specific parameters are uncertain, use safe defaults to see the 'overall status'.
-      * **Amplitude:** If the event name is uncertain, MUST use **event='_active'** (Any Active Event).
-      * **GA4:** If metrics are confusing, use basic metrics like **metrics=['activeUsers', 'sessions']**.
-    - **Self-Correction:** If an error occurs after executing a tool, analyze the error message, correct the parameters, and **retry immediately**. (e.g., Amplitude 'Event does not exist' error -> Retry with '_active')
+    [⚠️ Technical Constraints & Anti-Hallucination]
+    1. **Google Search Console (GSC):**
+       - **NEVER send empty dimensions.** If you need total clicks/impressions, use **dimensions=['date']**.
+       - Empty dimensions cause system errors. Always specify at least one dimension like 'date', 'query', or 'page'.
+    2. **Data Integrity (NO FAKE NUMBERS):**
+       - You MUST use the **EXACT numbers** returned by the tool execution logs.
+       - **NEVER** invent numbers like "1,000,000" or round them significantly if the data says "48,910".
+       - If the tool returns an error or no data, explicitly state "No data available" or the error message. Do NOT make up a "likely scenario".
 
-    [Output Language]
-    **You MUST answer in Korean.**
+    [Reporting Format (Korean)]
+    Answer in **Korean** following this structure:
+    1. **📝 요약 (Summary):** A 1-sentence summary of the key finding.
+    2. **📊 주요 지표 (Key Metrics):** Markdown Table comparing Current vs Previous. (Use REAL numbers from logs)
+    3. **🧐 원인 분석 (Insight):** - 🟢 Positive Factor: ...
+       - 🔴 Risk Factor: ...
+       * (Provide specific reasons found through drill-down analysis)*
+    4. **🚀 실행 계획 (Action Plan):** - **MUST be Business/Marketing actions** (e.g., "Change the button color", "Increase budget"). 
+       - **Do NOT include "Analyze data" or "Check reports" here.** (You have already done that.)
+
+    **Remember:** You are explaining to a non-tech CEO. Be insightful but easy to understand.
   `;
 
   const chat = model.startChat({
     history: [
       { role: "user", parts: [{ text: systemInstruction }] },
-      // 1. 모델의 초기 응답(다짐)을 영어로 변경
       {
         role: "model",
         parts: [
           {
-            text: "Understood. I will skip using titles, start directly with the main points, and provide clear answers in Korean using easy language and visualized tables.",
+            text: "Understood. I will use the exact data from the logs, prevent GSC errors by always setting dimensions, and provide precise analysis.",
           },
         ],
       },
@@ -117,20 +119,25 @@ export async function chatWithGemini(
   });
 
   try {
-    console.log("🗣️ 사용자 질문:", userMessage);
+    console.log("🗣️ [User Question]:", userMessage);
 
     let result = await chat.sendMessage(userMessage);
     let response = result.response;
     let functionCalls = response.functionCalls();
 
     let loopCount = 0;
-    const MAX_LOOPS = 15; // 루프 횟수 조금 더 넉넉하게
+    const MAX_LOOPS = 15;
 
-    // 3. 도구 실행 루프
+    // --- 도구 실행 루프 ---
     while (functionCalls && functionCalls.length > 0 && loopCount < MAX_LOOPS) {
       loopCount++;
       const call = functionCalls[0];
-      console.log(`🤖 [Loop ${loopCount}] 도구 실행: ${call.name}`, call.args);
+
+      console.log(
+        `\n================= 🤖 Tool Execution [Step ${loopCount}] =================`
+      );
+      console.log(`🛠️ Tool Name: ${call.name}`);
+      console.log(`📥 Input Params:`, JSON.stringify(call.args, null, 2));
 
       const targetTool = REGISTERED_TOOLS.find(
         (tool) => tool.name === call.name
@@ -139,7 +146,6 @@ export async function chatWithGemini(
 
       if (targetTool) {
         try {
-          // 키가 없으면 에러 메시지를 리턴하므로 AI가 알 수 있음
           apiResult = await targetTool.execute(call.args, apiKeys);
         } catch (e: any) {
           apiResult = `Error executing tool: ${e.message}`;
@@ -148,9 +154,20 @@ export async function chatWithGemini(
         apiResult = `Error: Unknown tool '${call.name}'`;
       }
 
-      console.log("📤 Output Data: ", apiResult);
+      console.log(`📤 Output Data:`);
+      // 데이터가 너무 길 경우 생략하여 출력 (전체 데이터는 AI에게 전달됨)
+      if (apiResult.length > 1000) {
+        console.log(
+          apiResult.substring(0, 1000) + "\n... (more data sent to AI) ..."
+        );
+      } else {
+        console.log(apiResult);
+      }
+      console.log(
+        `==================================================================\n`
+      );
 
-      // 결과 전달
+      // 🔄 결과를 AI에게 전달하고, AI의 '다음 반응'을 받음
       result = await chat.sendMessage([
         {
           functionResponse: {
@@ -164,15 +181,27 @@ export async function chatWithGemini(
       functionCalls = response.functionCalls();
     }
 
-    // 4. [중요] 루프가 끝난 후, 최종 리포트 작성 요청
-    // 여기서 AI가 데이터를 다 보고 나서 할 말을 정리하도록 시킵니다.
-    // 2. 최종 리포트 요청 메시지를 영어로 변경
-    const finalRequest = await chat.sendMessage(
-      "Write the final answer based on the retrieved data."
-    );
+    // 🔥 [수정됨] 루프 종료 후 처리 로직 개선
 
-    const finalText = finalRequest.response.text();
-    if (!finalText) return "분석을 완료했으나 리포트 생성에 실패했습니다.";
+    // Case 1: 루프가 횟수 초과로 강제 종료된 경우 (아직 할 말이 남았을 수 있음)
+    if (loopCount >= MAX_LOOPS) {
+      const finalRequest = await chat.sendMessage(
+        "You have reached the tool execution limit. Please summarize the data you have gathered so far and provide a final answer in Korean."
+      );
+      return finalRequest.response.text();
+    }
+
+    // Case 2: 정상 종료 (더 이상 도구를 쓸 필요가 없음 -> 이미 답변을 생성했음)
+    // 이때 response.text()에는 도구 결과를 보고 생성한 최종 답변이 들어있습니다.
+    const finalText = response.text();
+
+    if (!finalText) {
+      // 혹시라도 텍스트가 비어있다면(매우 드뭄), 강제로 요청
+      const retryRequest = await chat.sendMessage(
+        "Please provide the final analysis results in Korean based on the data collected."
+      );
+      return retryRequest.response.text();
+    }
 
     return finalText;
   } catch (error: any) {
