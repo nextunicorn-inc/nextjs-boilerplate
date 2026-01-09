@@ -34,7 +34,6 @@ export const ANALYTICS_TOOLS: AnalyticsToolUI[] = [
       },
     ],
   },
-  // 👇 [추가] Google Search Console 설정
   {
     id: "gsc",
     name: "Google Search Console",
