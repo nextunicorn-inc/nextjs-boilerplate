@@ -1,63 +1,311 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+
+interface SupportProgram {
+  id: string;
+  source: string;
+  sourceId: string;
+  category: string;
+  title: string;
+  organization: string | null;
+  region: string | null;
+  applicationStart: string | null;
+  applicationEnd: string | null;
+  url: string;
+  viewCount: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+interface CrawlResult {
+  success: boolean;
+  count: number;
+  errors?: string[];
+}
 
 export default function Home() {
+  const router = useRouter();
+  const [programs, setPrograms] = useState<SupportProgram[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlStatus, setCrawlStatus] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // 데이터 조회
+  const fetchPrograms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('page', currentPage.toString());
+      params.set('limit', '15');
+      if (selectedSource) params.set('source', selectedSource);
+
+      const response = await fetch(`/api/programs?${params}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setPrograms(data.data);
+        setPagination(data.pagination);
+      }
+    } catch (error) {
+      console.error('데이터 조회 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, selectedSource]);
+
+  // 크롤링 실행
+  const handleCrawl = async (source?: string) => {
+    setCrawling(true);
+    setCrawlStatus('크롤링 중...');
+
+    try {
+      const params = new URLSearchParams();
+      if (source) params.set('source', source);
+      params.set('maxPages', '2');
+      params.set('fetchDetails', 'true');
+
+      const response = await fetch(`/api/crawl?${params}`);
+      const data = await response.json();
+
+      if (data.success) {
+        const results = data.results as { [key: string]: CrawlResult };
+        const summary = Object.entries(results)
+          .map(([key, val]) => `${key}: ${val.count}개`)
+          .join(', ');
+        setCrawlStatus(`✅ 완료! ${summary}`);
+        // 데이터 새로고침
+        fetchPrograms();
+      } else {
+        setCrawlStatus('❌ 크롤링 실패');
+      }
+    } catch (error) {
+      console.error('크롤링 실패:', error);
+      setCrawlStatus('❌ 크롤링 오류 발생');
+    } finally {
+      setCrawling(false);
+      // 3초 후 상태 메시지 제거
+      setTimeout(() => setCrawlStatus(null), 5000);
+    }
+  };
+
+  // 초기 로드
+  useEffect(() => {
+    fetchPrograms();
+  }, [fetchPrograms]);
+
+  // 날짜 포맷팅
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+  };
+
+  // D-day 계산
+  const getDday = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const today = new Date();
+    const endDate = new Date(dateStr);
+    const diff = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return null;
+    if (diff === 0) return 'D-Day';
+    return `D-${diff}`;
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-zinc-900 text-zinc-100">
+      {/* 헤더 */}
+      <header className="border-b border-zinc-800 bg-zinc-950">
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-white">
+              파인드덱 <span className="text-zinc-500 font-normal text-sm ml-2">Admin</span>
+            </h1>
+            <div className="flex items-center gap-3">
+              {crawlStatus && (
+                <span className="text-sm text-zinc-400">{crawlStatus}</span>
+              )}
+              <button
+                onClick={() => handleCrawl()}
+                disabled={crawling}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {crawling ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    크롤링 중...
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    크롤링 실행
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {/* 메인 컨텐츠 */}
+      <main className="mx-auto max-w-7xl px-6 py-6">
+        {/* 필터 및 통계 */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <select
+              value={selectedSource}
+              onChange={(e) => {
+                setSelectedSource(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">전체 소스</option>
+              <option value="k-startup">K-Startup</option>
+              <option value="bizinfo">기업마당</option>
+            </select>
+            <button
+              onClick={() => fetchPrograms()}
+              disabled={loading}
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+            >
+              새로고침
+            </button>
+          </div>
+          {pagination && (
+            <div className="text-sm text-zinc-500">
+              총 <span className="text-zinc-300 font-medium">{pagination.total}</span>개 공고
+            </div>
+          )}
+        </div>
+
+        {/* 테이블 */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-zinc-800 bg-zinc-900/50">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">소스</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">분류</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">제목</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">지역</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">마감</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">수집일</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
+                      <svg className="h-6 w-6 animate-spin mx-auto mb-2" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      로딩 중...
+                    </td>
+                  </tr>
+                ) : programs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
+                      데이터가 없습니다. 크롤링을 실행해주세요.
+                    </td>
+                  </tr>
+                ) : (
+                  programs.map((program) => {
+                    const dday = getDday(program.applicationEnd);
+                    return (
+                      <tr
+                        key={program.id}
+                        onClick={() => router.push(`/programs/${program.id}`)}
+                        className="hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                      >
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${program.source === 'k-startup'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-green-500/20 text-green-400'
+                            }`}>
+                            {program.source === 'k-startup' ? 'K-Startup' : '기업마당'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-zinc-400">
+                          {program.category}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="text-sm text-zinc-100 group-hover:text-blue-400 transition-colors line-clamp-2"
+                          >
+                            {program.title.replace(/\s+/g, ' ').trim()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-zinc-400">
+                          {program.region || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-zinc-400">
+                              {formatDate(program.applicationEnd)}
+                            </span>
+                            {dday && (
+                              <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${dday === 'D-Day' ? 'bg-red-500/20 text-red-400' :
+                                parseInt(dday.split('-')[1]) <= 7 ? 'bg-orange-500/20 text-orange-400' :
+                                  'bg-zinc-700 text-zinc-400'
+                                }`}>
+                                {dday}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-zinc-500">
+                          {formatDate(program.createdAt)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 페이지네이션 */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="border-t border-zinc-800 px-4 py-3 flex items-center justify-between">
+              <div className="text-sm text-zinc-500">
+                페이지 {pagination.page} / {pagination.totalPages}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  이전
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(pagination.totalPages, p + 1))}
+                  disabled={currentPage === pagination.totalPages}
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
