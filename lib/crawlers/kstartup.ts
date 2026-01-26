@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { SupportProgramData, CrawlResult } from './types';
+import { SupportProgramData, CrawlResult, CrawlOptions } from './types';
 import prisma from '../prisma';
 import { cleanTitle, getCleanText } from './utils';
 
@@ -414,10 +414,11 @@ function getTotalPages(html: string): number {
 /**
  * k-startup 전체 크롤링
  */
-export async function crawlKStartup(options: { maxPages?: number; fetchDetails?: boolean } = {}): Promise<CrawlResult> {
-  const { maxPages = 3, fetchDetails = true } = options;
+export async function crawlKStartup(options: CrawlOptions = {}): Promise<CrawlResult> {
+  const { maxPages = 3, fetchDetails = true, limit } = options;
   const errors: string[] = [];
-  let totalCount = 0;
+  let successCount = 0;
+  let totalProcessed = 0;
 
   try {
     console.log('[k-startup] 크롤링 시작...');
@@ -439,6 +440,8 @@ export async function crawlKStartup(options: { maxPages?: number; fetchDetails?:
         console.log(`[k-startup] 페이지 ${page}에서 ${items.length}개 공고 발견`);
 
         for (const item of items) {
+          if (limit && totalProcessed >= limit) break;
+
           try {
             let detailData = {};
 
@@ -510,7 +513,8 @@ export async function crawlKStartup(options: { maxPages?: number; fetchDetails?:
               },
             });
 
-            totalCount++;
+            successCount++;
+            totalProcessed++;
           } catch (itemError) {
             const errorMsg = `공고 ${item.sourceId} 처리 실패: ${itemError}`;
             console.error(`[k-startup] ${errorMsg}`);
@@ -529,18 +533,18 @@ export async function crawlKStartup(options: { maxPages?: number; fetchDetails?:
       }
     }
 
-    console.log(`[k-startup] 크롤링 완료: ${totalCount}개 처리`);
+    console.log(`[k-startup] 크롤링 완료: ${successCount}개 처리`);
 
     return {
       success: errors.length === 0,
-      count: totalCount,
+      count: successCount,
       errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error) {
     console.error('[k-startup] 크롤링 실패:', error);
     return {
       success: false,
-      count: totalCount,
+      count: successCount,
       errors: [`크롤링 실패: ${error}`],
     };
   }

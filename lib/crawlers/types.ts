@@ -26,3 +26,11 @@ export interface CrawlResult {
   count: number;
   errors?: string[];
 }
+
+export interface CrawlOptions {
+  maxPages?: number;
+  fetchDetails?: boolean;
+  usePuppeteer?: boolean;
+  targetId?: string;
+  limit?: number;
+}

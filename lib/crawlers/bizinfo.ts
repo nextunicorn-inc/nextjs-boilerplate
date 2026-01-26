@@ -1,7 +1,10 @@
 import * as cheerio from 'cheerio';
-import { SupportProgramData, CrawlResult } from './types';
+import { SupportProgramData, CrawlResult, CrawlOptions } from './types';
 import prisma from '../prisma';
 import { getCleanText } from './utils';
+import puppeteer from 'puppeteer';
+import { processBizinfoPage } from './bizinfo-pup';
+import { extractApplicationTarget } from '../llm/extract-target';
 
 const BASE_URL = 'https://www.bizinfo.go.kr';
 const LIST_URL = `${BASE_URL}/web/lay1/bbs/S1T122C128/AS/74/list.do`;
@@ -179,11 +182,19 @@ function parseDetailPage(html: string): DetailPageData {
 
   const result: DetailPageData = {};
 
-  // 테이블 형식 데이터 파싱
-  $('th, dt').each((_, el) => {
-    const headerText = getCleanText($, el);
-    const $td = $(el).next('td, dd');
-    const value = getCleanText($, $td);
+  console.log('[bizinfo] parseDetailPage called, HTML length:', html.length);
+
+  // 방법 1: 기업마당 공통 구조 (span.s_title + 다음 형제 div.txt)
+  $('span.s_title').each((_, el) => {
+    const $title = $(el);
+    const headerText = getCleanText($, $title).trim();
+
+    // 다음 형제 요소에서 div.txt 찾기
+    const $nextTxt = $title.next('div.txt');
+    if (!$nextTxt.length) return;
+
+    const value = getCleanText($, $nextTxt).trim();
+    if (!headerText || !value) return;
 
     if (headerText.includes('사업개요') || headerText.includes('지원내용')) {
       result.description = value;
@@ -206,6 +217,35 @@ function parseDetailPage(html: string): DetailPageData {
     }
   });
 
+  // 방법 2: 테이블 형식 데이터 파싱 (fallback)
+  if (!result.description && !result.eligibility) {
+    $('th, dt').each((_, el) => {
+      const headerText = getCleanText($, el);
+      const $td = $(el).next('td, dd');
+      const value = getCleanText($, $td);
+
+      if (headerText.includes('사업개요') || headerText.includes('지원내용')) {
+        result.description = value;
+      } else if (headerText.includes('지원대상') || headerText.includes('신청자격') || headerText.includes('참여자격')) {
+        result.eligibility = value;
+      } else if (headerText.includes('사업수행기관') || headerText.includes('수행기관')) {
+        result.organization = value;
+      } else if (headerText.includes('신청기간') || headerText.includes('접수기간')) {
+        const periodMatch = value.match(/(\d{4}[-./]\d{2}[-./]\d{2})\s*[~-]\s*(\d{4}[-./]\d{2}[-./]\d{2})/);
+        if (periodMatch) {
+          const start = parseDate(periodMatch[1]);
+          const end = parseDate(periodMatch[2]);
+          if (start) result.applicationStart = start;
+          if (end) result.applicationEnd = end;
+        }
+      } else if (headerText.includes('지역') || headerText === '지역') {
+        result.targetRegion = value;
+      } else if (headerText.includes('분야') || headerText.includes('지원분야')) {
+        result.supportField = value;
+      }
+    });
+  }
+
   // 본문 컨텐츠에서 추가 정보 추출
   if (!result.description) {
     // Try to find the main content area and clean it
@@ -218,6 +258,13 @@ function parseDetailPage(html: string): DetailPageData {
   // 길이 제한
   if (result.description) result.description = result.description.substring(0, 5000);
   if (result.eligibility) result.eligibility = result.eligibility.substring(0, 2000);
+
+  console.log('[bizinfo] parseDetailPage result:', {
+    hasDescription: !!result.description,
+    descriptionLength: result.description?.length,
+    hasEligibility: !!result.eligibility,
+    organization: result.organization,
+  });
 
   return result;
 }
@@ -253,12 +300,22 @@ function getTotalPages(html: string): number {
 /**
  * 기업마당 전체 크롤링
  */
-export async function crawlBizinfo(options: { maxPages?: number; fetchDetails?: boolean } = {}): Promise<CrawlResult> {
-  const { maxPages = 3, fetchDetails = true } = options;
+export async function crawlBizinfo(options: CrawlOptions = {}): Promise<CrawlResult> {
+  const { maxPages = 3, fetchDetails = true, usePuppeteer = false, targetId, limit } = options;
   const errors: string[] = [];
-  let totalCount = 0;
+  let successCount = 0;
+  let totalProcessed = 0;
+  let browser = null;
 
   try {
+    if (usePuppeteer) {
+      console.log('[bizinfo] Launching Puppeteer...');
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1920,1080'],
+      });
+    }
+
     console.log('[bizinfo] 크롤링 시작...');
 
     // 첫 페이지 가져와서 전체 페이지 수 확인
@@ -268,16 +325,30 @@ export async function crawlBizinfo(options: { maxPages?: number; fetchDetails?: 
     console.log(`[bizinfo] 총 ${totalPages}페이지 크롤링 예정`);
 
     // 페이지별 크롤링
-    for (let page = 1; page <= totalPages; page++) {
+    const loopMax = targetId ? 1 : totalPages;
+
+    for (let page = 1; page <= loopMax; page++) {
       try {
-        console.log(`[bizinfo] 페이지 ${page}/${totalPages} 크롤링 중...`);
+        let items: any[] = [];
 
-        const html = page === 1 ? firstPageHtml : await fetchListPage(page);
-        const items = parseListPage(html);
-
-        console.log(`[bizinfo] 페이지 ${page}에서 ${items.length}개 공고 발견`);
+        if (targetId) {
+          console.log(`[bizinfo] Target ID 크롤링: ${targetId}`);
+          items = [{
+            sourceId: targetId,
+            url: `${VIEW_URL}?pblancId=${targetId}`,
+            title: 'Target Debug',
+            category: 'Debug'
+          }];
+        } else {
+          console.log(`[bizinfo] 페이지 ${page}/${totalPages} 크롤링 중...`);
+          const html = page === 1 ? firstPageHtml : await fetchListPage(page);
+          items = parseListPage(html);
+          console.log(`[bizinfo] 페이지 ${page}에서 ${items.length}개 공고 발견`);
+        }
 
         for (const item of items) {
+          if (limit && totalProcessed >= limit) break;
+
           try {
             let detailData = {};
 
@@ -286,6 +357,34 @@ export async function crawlBizinfo(options: { maxPages?: number; fetchDetails?: 
               await delay(REQUEST_DELAY);
               const detailHtml = await fetchDetailPage(item.sourceId);
               detailData = parseDetailPage(detailHtml);
+
+              // LLM Processing: Vision AI (Puppeteer) or Text-based
+              if (usePuppeteer && browser) {
+                // Vision AI 방식
+                try {
+                  const puppeteerTarget = await processBizinfoPage(browser, item.url, item.sourceId);
+                  if (puppeteerTarget) {
+                    (detailData as any).applicationTarget = JSON.stringify(puppeteerTarget);
+                    (detailData as any).llmProcessed = true;
+                  }
+                } catch (pupError) {
+                  console.error(`[bizinfo] Puppeteer error for ${item.sourceId}:`, pupError);
+                }
+              } else {
+                // 텍스트 기반 LLM 분석
+                try {
+                  const textTarget = await extractApplicationTarget(
+                    (detailData as any).eligibility || '',
+                    (detailData as any).description || ''
+                  );
+                  if (textTarget) {
+                    (detailData as any).applicationTarget = JSON.stringify(textTarget);
+                    (detailData as any).llmProcessed = true;
+                  }
+                } catch (llmError) {
+                  console.error(`[bizinfo] LLM error for ${item.sourceId}:`, llmError);
+                }
+              }
             }
 
             // DB에 저장 (upsert)
@@ -321,6 +420,8 @@ export async function crawlBizinfo(options: { maxPages?: number; fetchDetails?: 
                 eligibility: programData.eligibility,
                 targetRegion: programData.targetRegion,
                 supportField: programData.supportField,
+                applicationTarget: (detailData as any)?.applicationTarget,
+                llmProcessed: (detailData as any)?.llmProcessed || false,
                 updatedAt: new Date(),
               },
               create: {
@@ -337,10 +438,12 @@ export async function crawlBizinfo(options: { maxPages?: number; fetchDetails?: 
                 eligibility: programData.eligibility,
                 targetRegion: programData.targetRegion,
                 supportField: programData.supportField,
+                applicationTarget: (detailData as any)?.applicationTarget,
+                llmProcessed: (detailData as any)?.llmProcessed || false,
               },
             });
 
-            totalCount++;
+            successCount++;
           } catch (itemError) {
             const errorMsg = `공고 ${item.sourceId} 처리 실패: ${itemError}`;
             console.error(`[bizinfo] ${errorMsg}`);
@@ -359,19 +462,21 @@ export async function crawlBizinfo(options: { maxPages?: number; fetchDetails?: 
       }
     }
 
-    console.log(`[bizinfo] 크롤링 완료: ${totalCount}개 처리`);
+    console.log(`[bizinfo] 크롤링 완료: ${successCount}개 처리`);
 
     return {
       success: errors.length === 0,
-      count: totalCount,
+      count: successCount,
       errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error) {
     console.error('[bizinfo] 크롤링 실패:', error);
     return {
       success: false,
-      count: totalCount,
+      count: successCount,
       errors: [`크롤링 실패: ${error}`],
     };
+  } finally {
+    if (browser) await browser.close();
   }
 }
