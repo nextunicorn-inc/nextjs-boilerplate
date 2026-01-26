@@ -33,19 +33,24 @@ interface ListItem {
  */
 async function fetchListPage(page: number = 1, rows: number = 15): Promise<string> {
   const url = `${LIST_URL}?rows=${rows}&cpage=${page}`;
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.text();
+    } catch (e) {
+      lastError = e;
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
     }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch list page ${page}: ${response.status}`);
   }
-
-  return response.text();
+  throw lastError;
 }
 
 /**
@@ -146,19 +151,24 @@ function parseListPage(html: string): ListItem[] {
  */
 async function fetchDetailPage(pblancId: string): Promise<string> {
   const url = `${VIEW_URL}?pblancId=${pblancId}`;
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.text();
+    } catch (e) {
+      lastError = e;
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
     }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch detail page ${pblancId}: ${response.status}`);
   }
-
-  return response.text();
+  throw lastError;
 }
 
 /**
@@ -364,7 +374,12 @@ export async function crawlBizinfo(options: CrawlOptions = {}): Promise<CrawlRes
                 try {
                   const puppeteerTarget = await processBizinfoPage(browser, item.url, item.sourceId);
                   if (puppeteerTarget) {
-                    (detailData as any).applicationTarget = JSON.stringify(puppeteerTarget);
+                    (detailData as any).aiSummary = puppeteerTarget.aiSummary;
+                    (detailData as any).companyAge = puppeteerTarget.companyAge;
+                    (detailData as any).targetRegion = puppeteerTarget.targetRegion;
+                    (detailData as any).targetAge = puppeteerTarget.targetAge;
+                    (detailData as any).targetIndustry = puppeteerTarget.targetIndustry;
+                    (detailData as any).exclusionDetail = puppeteerTarget.exclusionDetail;
                     (detailData as any).llmProcessed = true;
                   }
                 } catch (pupError) {
@@ -378,7 +393,12 @@ export async function crawlBizinfo(options: CrawlOptions = {}): Promise<CrawlRes
                     (detailData as any).description || ''
                   );
                   if (textTarget) {
-                    (detailData as any).applicationTarget = JSON.stringify(textTarget);
+                    (detailData as any).aiSummary = textTarget.aiSummary;
+                    (detailData as any).companyAge = textTarget.companyAge;
+                    (detailData as any).targetRegion = textTarget.targetRegion;
+                    (detailData as any).targetAge = textTarget.targetAge;
+                    (detailData as any).targetIndustry = textTarget.targetIndustry;
+                    (detailData as any).exclusionDetail = textTarget.exclusionDetail;
                     (detailData as any).llmProcessed = true;
                   }
                 } catch (llmError) {
@@ -418,11 +438,16 @@ export async function crawlBizinfo(options: CrawlOptions = {}): Promise<CrawlRes
                 url: programData.url,
                 description: programData.description,
                 eligibility: programData.eligibility,
-                targetRegion: programData.targetRegion,
-                supportField: programData.supportField,
-                applicationTarget: (detailData as any)?.applicationTarget,
+                companyAge: (detailData as any)?.companyAge || programData.companyAge, // prioritize LLM
+                targetRegion: (detailData as any)?.targetRegion || programData.targetRegion, // prioritize LLM
+                targetAge: (detailData as any)?.targetAge,
+                targetIndustry: (detailData as any)?.targetIndustry,
+
+                aiSummary: (detailData as any)?.aiSummary,
+                targetDetail: null, // Clear old field
+                exclusionDetail: (detailData as any)?.exclusionDetail,
                 llmProcessed: (detailData as any)?.llmProcessed || false,
-                updatedAt: new Date(),
+                applicationTarget: null, // Clear old field
               },
               create: {
                 source: programData.source,
@@ -436,10 +461,17 @@ export async function crawlBizinfo(options: CrawlOptions = {}): Promise<CrawlRes
                 url: programData.url,
                 description: programData.description,
                 eligibility: programData.eligibility,
-                targetRegion: programData.targetRegion,
+                targetRegion: (detailData as any)?.targetRegion || programData.targetRegion,
+                companyAge: (detailData as any)?.companyAge,
+                targetAge: (detailData as any)?.targetAge,
+                targetIndustry: (detailData as any)?.targetIndustry,
                 supportField: programData.supportField,
-                applicationTarget: (detailData as any)?.applicationTarget,
+
+                aiSummary: (detailData as any)?.aiSummary,
+                targetDetail: null,
+                exclusionDetail: (detailData as any)?.exclusionDetail,
                 llmProcessed: (detailData as any)?.llmProcessed || false,
+                applicationTarget: null,
               },
             });
 

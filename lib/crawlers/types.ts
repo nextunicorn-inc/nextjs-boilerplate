@@ -19,6 +19,12 @@ export interface SupportProgramData {
   companyAge?: string;      // 창업업력
   supportField?: string;    // 지원분야
   institutionType?: string; // 기관구분
+
+  // AI 추출 데이터
+  aiSummary?: string;
+  targetDetail?: string;
+  exclusionDetail?: string;
+  llmProcessed?: boolean;
 }
 
 export interface CrawlResult {
