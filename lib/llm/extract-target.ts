@@ -1,43 +1,59 @@
+
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 /**
- * LLM 추출 데이터 구조 (Refactoring Phase)
- * - aiSummary: 공고 전체 요약
- * - targetDetail: 신청 자격 상세 서술
- * - exclusionDetail: 제외 대상 상세 서술
+ * LLM 추출 데이터 구조 (Structured Matching Data)
  */
 export interface ApplicationTarget {
-  aiSummary: string;
-  targetDetail: string;
-  exclusionDetail: string;
+  aiSummary: string;       // 공고 전체 요약
+  companyAge: string;      // 업력 (예: "7년 미만", "예비창업자")
+  targetRegion: string;    // 지역 (예: "서울", "전국")
+  targetAge: string;       // 대표자 연령 (예: "만 39세 이하", "무관")
+  targetIndustry: string;  // 대상 업종 (예: "SW", "제조업", "관광업")
+  exclusionDetail: string; // 제외 대상 (텍스트 요약)
 }
 
-// LLM 프롬프트 및 스키마 정의
+// LLM 프롬프트
 const EXTRACTION_PROMPT = `
-공고문 이미지/텍스트를 분석하여 다음 3가지 핵심 정보를 추출 및 요약해줘.
-사용자가 지원 여부를 판단할 수 있도록 "서술형"으로 상세하게 작성해야 함.
+제공된 창업지원사업 공고문(이미지/텍스트)을 분석하여 핵심 정보를 JSON 형식으로 추출해줘.
+다음 6가지 항목을 정확하게 파악하여 값을 채워야 해.
 
-1. **aiSummary**: 공고의 전체 내용을 3~5문장으로 요약. (사업 목적, 주요 지원 내용, 지원 규모 등 핵심 포함)
-2. **targetDetail**: "신청 자격" 및 "지원 대상"에 대한 모든 조건을 빠짐없이 서술. (업력, 지역, 분야, 매출, 고용 조건 등 포함). 목록형 텍스트로 정리.
-3. **exclusionDetail**: "신청 제외 대상", "지원 불가 사유", "참여 제한" 조건을 빠짐없이 서술. (매우 중요함. 없으면 "특이사항 없음"으로 기재). 목록형 텍스트로 정리.
+1. **aiSummary**: 공고 전체 내용을 3~5문장으로 핵심 요약 (지원 목적, 대상, 규모 등).
+2. **companyAge**: 신청 가능한 **업력(창업기간)** 요건을 명확히 추출.
+   - 예: "예비창업자", "3년 미만", "7년 이내", "무관"
+3. **targetRegion**: 사업장 소재지 등 **지역 제한**이 있는지 확인.
+   - 예: "서울", "경기도", "전국", "제주"
+4. **targetAge**: 대표자 **연령 제한**이 있는지 확인.
+   - 예: "만 39세 이하", "만 19세~39세", "무관"
+5. **targetIndustry**: 특정 **업종/분야**만 지원한다면 기재.
+   - 예: "정보통신업", "제조업", "바이오", "전분야(일반)"
+6. **exclusionDetail**: **신청 제외 대상**이나 지원 불가 사유를 찾아내어 요약.
+   - 금융채무 불이행, 국세 체납 등 일반적인 제외 사유가 명시되어 있다면 "일반 제외 요건(채무불이행 등)"으로 요약 가능.
+   - 특이한 제외 요건이 있다면 상세히 적을 것.
 
-(주의: 입력된 이미지는 하나의 긴 공고문이 나누어진 것입니다. 모든 이미지를 순서대로 빠짐없이 읽고 통합하여 분석하시오.)
+**주의사항**:
+- 공고문 이미지 내에 있는 표(Table) 내용을 꼼꼼히 확인해. 자격 요건은 보통 표 안에 있어.
+- 값이 명시되지 않았거나 제한이 없어 보이면 "무관", "전국" 등으로 합리적으로 기재해. ("확인불가" X, 빈값 X)
+- 내용을 정확히 파악하여 매칭 시스템이 활용할 수 있는 단어로 짧게 요약해줘. (문장보다는 핵심 키워드/구 위주로, aiSummary 빼고)
 `;
 
 const schema: any = {
   type: SchemaType.OBJECT,
   properties: {
-    aiSummary: { type: SchemaType.STRING, description: "공고 전체 핵심 요약 (3~5문장)" },
-    targetDetail: { type: SchemaType.STRING, description: "신청 자격 및 지원 대상 상세 서술 (목록형 줄글)" },
-    exclusionDetail: { type: SchemaType.STRING, description: "신청 제외 대상 및 제한 조건 상세 서술 (목록형 줄글)" },
+    aiSummary: { type: SchemaType.STRING },
+    companyAge: { type: SchemaType.STRING },
+    targetRegion: { type: SchemaType.STRING },
+    targetAge: { type: SchemaType.STRING },
+    targetIndustry: { type: SchemaType.STRING },
+    exclusionDetail: { type: SchemaType.STRING },
   },
-  required: ["aiSummary", "targetDetail", "exclusionDetail"],
+  required: ["aiSummary", "companyAge", "targetRegion", "targetAge", "targetIndustry", "exclusionDetail"],
 };
 
 /**
- * eligibility 텍스트에서 정보 추출 (Text Mode)
+ * Text Mode Extraction
  */
 export async function extractApplicationTarget(
   eligibilityText: string,
@@ -55,20 +71,19 @@ export async function extractApplicationTarget(
   const inputText = [eligibilityText, descriptionText].filter(Boolean).join('\n\n---\n\n');
 
   try {
+    // Structured output works best with 2.0 Flash
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: EXTRACTION_PROMPT + '\n\n' + inputText }] }],
+      contents: [{ role: 'user', parts: [{ text: EXTRACTION_PROMPT + '\n\n[입력 텍스트]\n' + inputText }] }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema: schema,
       },
     });
 
-    const response = result.response;
-    return parseLlmResponse(response.text());
+    return parseLlmResponse(result.response.text());
   } catch (error) {
     console.error('[LLM] Text extraction failed:', error);
     return null;
@@ -76,7 +91,7 @@ export async function extractApplicationTarget(
 }
 
 /**
- * 이미지(들)에서 정보 추출 (Vision Mode)
+ * Vision Mode Extraction
  */
 export async function extractTargetFromImage(
   images: string | string[],
@@ -88,7 +103,11 @@ export async function extractTargetFromImage(
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // Vision also works with gemini-2.0-flash for structured data
+    const model = genAI.getGenerativeModel(
+      { model: 'gemini-2.0-flash' },
+      { timeout: 300000 } // 5 min timeout
+    );
 
     const imageList = Array.isArray(images) ? images : [images];
     const imageParts = imageList.map(img => ({
@@ -98,30 +117,22 @@ export async function extractTargetFromImage(
       },
     }));
 
-    // 타임아웃 90초
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Vision AI request timed out')), 90000)
-    );
-
-    const generatePromise = model.generateContent({
+    const result = await model.generateContent({
       contents: [{
         role: 'user',
         parts: [
-          { text: EXTRACTION_PROMPT },
           ...imageParts,
+          { text: EXTRACTION_PROMPT + "\n\n결과를 반드시 JSON으로 출력해." },
         ],
       }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema: schema,
       },
     });
 
-    const result: any = await Promise.race([generatePromise, timeoutPromise]);
-    const response = result.response;
-    return parseLlmResponse(response.text());
+    return parseLlmResponse(result.response.text());
 
   } catch (error) {
     console.error('Vision AI extraction error:', error);
@@ -134,14 +145,21 @@ function parseLlmResponse(text: string): ApplicationTarget {
     const parsed = JSON.parse(text) as ApplicationTarget;
     return {
       aiSummary: parsed.aiSummary || '',
-      targetDetail: parsed.targetDetail || '',
+      companyAge: parsed.companyAge || '무관',
+      targetRegion: parsed.targetRegion || '전국',
+      targetAge: parsed.targetAge || '무관',
+      targetIndustry: parsed.targetIndustry || '전분야',
       exclusionDetail: parsed.exclusionDetail || '',
     };
   } catch (e) {
     console.error('JSON Parse Error:', e);
+    // Return empty fallback
     return {
       aiSummary: '',
-      targetDetail: '',
+      companyAge: '',
+      targetRegion: '',
+      targetAge: '',
+      targetIndustry: '',
       exclusionDetail: '',
     };
   }
