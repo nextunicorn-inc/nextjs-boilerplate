@@ -111,7 +111,13 @@ export default function Home() {
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+    const yy = date.getFullYear().toString().slice(-2);
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${yy}.${mm}.${dd} ${hh}:${min}:${ss}`;
   };
 
   // D-day 계산
@@ -203,18 +209,15 @@ export default function Home() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">소스</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">분류</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider w-32">소스</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">제목</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">지역</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">마감</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">수집일</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider w-40">수집일</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
+                    <td colSpan={3} className="px-4 py-12 text-center text-zinc-500">
                       <svg className="h-6 w-6 animate-spin mx-auto mb-2" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -224,61 +227,35 @@ export default function Home() {
                   </tr>
                 ) : programs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
+                    <td colSpan={3} className="px-4 py-12 text-center text-zinc-500">
                       데이터가 없습니다. 크롤링을 실행해주세요.
                     </td>
                   </tr>
                 ) : (
-                  programs.map((program) => {
-                    const dday = getDday(program.applicationEnd);
-                    return (
-                      <tr
-                        key={program.id}
-                        onClick={() => router.push(`/programs/${program.id}`)}
-                        className="hover:bg-zinc-900/50 transition-colors cursor-pointer"
-                      >
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${program.source === 'k-startup'
-                            ? 'bg-purple-500/20 text-purple-400'
-                            : 'bg-green-500/20 text-green-400'
-                            }`}>
-                            {program.source === 'k-startup' ? 'K-Startup' : '기업마당'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-zinc-400">
-                          {program.category}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className="text-sm text-zinc-100 group-hover:text-blue-400 transition-colors line-clamp-2"
-                          >
-                            {program.title.replace(/\s+/g, ' ').trim()}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-zinc-400">
-                          {program.region || '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-zinc-400">
-                              {formatDate(program.applicationEnd)}
-                            </span>
-                            {dday && (
-                              <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${dday === 'D-Day' ? 'bg-red-500/20 text-red-400' :
-                                parseInt(dday.split('-')[1]) <= 7 ? 'bg-orange-500/20 text-orange-400' :
-                                  'bg-zinc-700 text-zinc-400'
-                                }`}>
-                                {dday}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-zinc-500">
-                          {formatDate(program.updatedAt)}
-                        </td>
-                      </tr>
-                    );
-                  })
+                  programs.map((program) => (
+                    <tr
+                      key={program.id}
+                      onClick={() => router.push(`/programs/${program.id}`)}
+                      className="hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                    >
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${program.source === 'k-startup'
+                          ? 'bg-purple-500/20 text-purple-400'
+                          : 'bg-green-500/20 text-green-400'
+                          }`}>
+                          {program.source === 'k-startup' ? 'K-Startup' : '기업마당'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-zinc-100 group-hover:text-blue-400 transition-colors line-clamp-2">
+                          {program.title.replace(/\s+/g, ' ').trim()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-zinc-400">
+                        {formatDate(program.createdAt)}
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

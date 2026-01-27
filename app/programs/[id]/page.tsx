@@ -51,56 +51,65 @@ export default async function ProgramDetailPage({ params }: Props) {
           <h1 className="text-3xl font-bold text-white mb-6 leading-tight">
             {program.title}
           </h1>
+
+          {/* 핵심 매칭 정보 (1,2,3순위) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="rounded-lg bg-zinc-800/50 p-4 border border-zinc-700/50">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1">창업 업력</span>
+              <span className="text-lg font-bold text-blue-400">{program.companyAge || '정보 없음'}</span>
+            </div>
+            <div className="rounded-lg bg-zinc-800/50 p-4 border border-zinc-700/50">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1">모집 지역</span>
+              <span className="text-lg font-bold text-emerald-400">{program.targetRegion || '정보 없음'}</span>
+            </div>
+            <div className="rounded-lg bg-zinc-800/50 p-4 border border-zinc-700/50">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1">연령</span>
+              <span className="text-lg font-bold text-purple-400">{program.targetAge || '정보 없음'}</span>
+            </div>
+            <div className="rounded-lg bg-zinc-800/50 p-4 border border-zinc-700/50">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider block mb-1">업종</span>
+              <span className="text-lg font-bold text-orange-400">{program.targetIndustry || '정보 없음'}</span>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-4">
             <a
               href={program.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 transition-colors"
             >
               원본 공고 보기 ↗
             </a>
           </div>
         </div>
 
-        {/* 메인 2단 그리드: 신청 자격 vs 제외 대상 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* 신청 자격 */}
-          <section className="flex flex-col h-full rounded-xl border border-blue-900/30 bg-blue-950/10">
-            <div className="px-6 py-4 border-b border-blue-900/30 bg-blue-900/20 rounded-t-xl">
-              <h2 className="text-lg font-bold text-blue-100 flex items-center gap-2">
-                ✅ 신청 자격 및 요건
-              </h2>
+        {/* 기본 정보 (확장) */}
+        <section className="mb-8 rounded-xl border border-zinc-800 bg-zinc-950">
+          <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900 rounded-t-xl">
+            <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
+              ℹ️ 기본 정보
+            </h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <InfoRow label="지원 분야" value={program.supportField} />
+            <InfoRow label="담당 기관" value={program.organization} />
+            <InfoRow label="접수 기간" value={`${formatDate(program.applicationStart)} ~ ${formatDate(program.applicationEnd)}`} />
+            <InfoRow label="지역 (상세)" value={program.region} />
+            <div className="pt-4 border-t border-zinc-800">
+              <dt className="font-medium text-zinc-400 mb-2">사업 개요</dt>
+              <dd className="text-zinc-300 leading-relaxed whitespace-pre-wrap text-sm">
+                {program.description || '개요 정보 없음'}
+              </dd>
             </div>
-            <div className="p-6 flex-1">
-              <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-blue-50 leading-relaxed">
-                {program.targetDetail || program.eligibility || '상세 자격 요건 분석 중...'}
+            {program.eligibility && (
+              <div className="pt-4 border-t border-zinc-800">
+                <dt className="font-medium text-zinc-400 mb-2">지원 대상 (원본)</dt>
+                <dd className="text-zinc-300 leading-relaxed whitespace-pre-wrap text-sm">
+                  {program.eligibility}
+                </dd>
               </div>
-            </div>
-          </section>
-
-          {/* 제외 대상 */}
-          <section className="flex flex-col h-full rounded-xl border border-red-900/30 bg-red-950/10">
-            <div className="px-6 py-4 border-b border-red-900/30 bg-red-900/20 rounded-t-xl">
-              <h2 className="text-lg font-bold text-red-100 flex items-center gap-2">
-                ⛔ 제외 대상 및 제한
-              </h2>
-            </div>
-            <div className="p-6 flex-1">
-              <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-red-50 leading-relaxed">
-                {program.exclusionDetail || '별도의 제외 조건/특이사항 없음 (또는 분석 중)'}
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {/* 하단: AI 요약 리포트 */}
-        <section className="mb-12 rounded-xl border border-emerald-900/30 bg-emerald-950/5 p-6 md:p-8">
-          <h2 className="text-xl font-bold text-emerald-100 mb-6 flex items-center gap-2">
-            ✨ AI 공고 요약 리포트
-          </h2>
-          <div className="prose prose-invert prose-lg max-w-none text-zinc-200 leading-relaxed whitespace-pre-wrap">
-            {program.aiSummary || program.description || '요약 정보 준비 중...'}
+            )}
           </div>
         </section>
 
