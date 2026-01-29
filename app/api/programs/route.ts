@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
           companyAge: true,
           supportField: true,
           institutionType: true,
+          targetIndustry: true,
           eligibility: true,
           createdAt: true,
           updatedAt: true,
