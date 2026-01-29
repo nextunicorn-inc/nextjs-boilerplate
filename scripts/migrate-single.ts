@@ -41,7 +41,7 @@ async function main() {
         },
       });
       console.log(`  > Updated Successfully!`);
-      console.log(`  > Summary: ${target.aiSummary.substring(0, 50)}...`);
+      console.log(`  > Summary: ${target.aiSummary?.substring(0, 50)}...`);
     } else {
       console.log(`  > Failed to extract target (Returned null)`);
     }

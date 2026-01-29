@@ -11,6 +11,11 @@ export interface ApplicationTarget {
   targetRegion: string;    // 지역 (예: "서울", "전국")
   targetAge: string;       // 대표자 연령 (예: "만 39세 이하", "무관")
   targetIndustry: string;  // 대상 업종 (예: "SW", "제조업", "관광업")
+
+  // Optional detailed fields for AI summary
+  aiSummary?: string;
+  targetDetail?: string;
+  exclusionDetail?: string;
 }
 
 // LLM 프롬프트
@@ -142,6 +147,9 @@ function parseLlmResponse(text: string): ApplicationTarget {
       targetRegion: parsed.targetRegion || '전국',
       targetAge: parsed.targetAge || '무관',
       targetIndustry: parsed.targetIndustry || '전분야',
+      aiSummary: parsed.aiSummary,
+      targetDetail: parsed.targetDetail,
+      exclusionDetail: parsed.exclusionDetail,
     };
   } catch (e) {
     console.error('JSON Parse Error:', e);

@@ -52,7 +52,7 @@ async function main() {
             // applicationTarget: null // Ensure old data is cleared
           },
         });
-        console.log(`  > Updated OK (${target.aiSummary.length} chars summary)`);
+        console.log(`  > Updated OK (${target.aiSummary?.length ?? 0} chars summary)`);
       } else {
         console.log(`  > Failed to extract target (Returned null)`);
       }
