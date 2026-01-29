@@ -5,7 +5,9 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // Dummy URL for Prisma CLI validation only.
+  // Runtime connection is handled by LibSQL adapter in lib/prisma.ts using TURSO_ envs.
+  url      = "file:./dev.db"
 }
 
 model SupportProgram {
@@ -33,6 +35,10 @@ model SupportProgram {
   targetIndustry   String?   // 대상업종 (제조업, SW, 콘텐츠 등) - New Matching Criteria
   institutionType  String?   // 기관구분 (공공기관, 민간 등)
   
+  // LLM Analyzed Fields (New)
+  aiSummary        String?   // AI 요약
+  targetDetail     String?   // 지원대상 상세
+  exclusionDetail  String?   // 지원제외 대상 상세
   // (Deprecated)
   applicationTarget String?  // LLM 추출된 신청대상 (JSON)
   llmProcessed      Boolean  @default(false)  // LLM 처리 완료 여부
