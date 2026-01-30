@@ -324,12 +324,23 @@ function parseDetailPage(html: string): DetailPageData {
 
   // 방법 4: 사업개요 텍스트에서 금액 패턴 추출 (fallback)
   if (!result.fundingAmount && result.description) {
-    // 패턴 예: "최대 1억원", "5천만원 이내", "500원/kg"
+    // 패턴 예: "최대 1억원", "5천만원 이내", "500원/kg", "업체당 2백만원"
     const fundingPatterns = [
+      // 기존 패턴
       /최대\s*(\d+(?:,\d+)*\s*(?:억|천만|백만|만)?원)/,
       /(\d+(?:,\d+)*\s*(?:억|천만|백만|만)?원)\s*(?:이내|이하|한도)/,
       /지원금액[:\s]*(\d+(?:,\d+)*\s*(?:억|천만|백만|만)?원)/,
-      /(\d+(?:,\d+)*원\/kg)/
+      /(\d+(?:,\d+)*원\/kg)/,
+      // 한글 숫자 패턴 (2백만원, 5천만원 등)
+      /(\d+백만원)/,
+      /(\d+천만원)/,
+      /(\d+억원)/,
+      // "업체당/1사당/개사당/기업당 OO원" 패턴
+      /(?:업체당|개사당|1사당|기업당|업체별)\s*(\d+(?:백|천)?만?원)/,
+      // 장려금/보조금/지원금 + 금액 패턴
+      /(?:장려금|보조금|지원금|사업비)[:\s]*(\d+(?:백|천)?만?원)/,
+      // 일반 금액 패턴 (숫자+단위+원)
+      /(\d+(?:,\d+)*(?:억|천만|백만|만|천|백)원)/,
     ];
     for (const pattern of fundingPatterns) {
       const match = result.description.match(pattern);
@@ -337,6 +348,14 @@ function parseDetailPage(html: string): DetailPageData {
         result.fundingAmount = match[1] || match[0];
         break;
       }
+    }
+  }
+
+  // 방법 5: 키워드 기반 supportField 추론 (fallback) - K-Startup과 동일
+  if (!result.supportField && result.description) {
+    const inferred = inferSupportField(result.description + ' ' + (result.eligibility || ''));
+    if (inferred) {
+      result.supportField = inferred;
     }
   }
 
